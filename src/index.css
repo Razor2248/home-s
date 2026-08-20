@@ -1,1 +1,140 @@
 @import "tailwindcss";
+
+@theme {
+  --font-sans: "Be Vietnam Pro", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque", "Be Vietnam Pro", ui-sans-serif, sans-serif;
+  --font-mono: "Space Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-ink-950: #071220;
+  --color-ink-900: #0b1b2e;
+  --color-ink-800: #122a45;
+  --color-ink-700: #1d3c5f;
+  --color-ink-600: #2e527c;
+  --color-ink-400: #6d87a6;
+  --color-paper: #f2f2ec;
+  --color-card: #ffffff;
+  --color-line: #e0e0d5;
+  --color-mute: #5f6b7e;
+
+  --color-safety-700: #b93a0e;
+  --color-safety-600: #d94a15;
+  --color-safety-500: #f4581c;
+  --color-safety-400: #ff7a45;
+  --color-safety-100: #fde3d6;
+  --color-safety-50: #fef1e9;
+
+  --color-good-700: #0c6b50;
+  --color-good-500: #12936f;
+  --color-good-100: #dcf1e8;
+
+  --color-warn-600: #b97a1f;
+  --color-warn-100: #faeccf;
+
+  --color-danger-600: #c94444;
+  --color-danger-100: #f9e2e2;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  @apply bg-paper font-sans text-ink-900 antialiased;
+}
+
+::selection {
+  background: #f4581c;
+  color: #fff;
+}
+
+/* ---------- textures ---------- */
+.bg-blueprint {
+  background-image: linear-gradient(rgba(11, 27, 46, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(11, 27, 46, 0.055) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+.bg-blueprint-dark {
+  background-image: linear-gradient(rgba(255, 255, 255, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.055) 1px, transparent 1px);
+  background-size: 26px 26px;
+}
+.stripes {
+  background: repeating-linear-gradient(-45deg, #f4581c 0 10px, #0b1b2e 10px 20px);
+}
+.stripes-soft {
+  background: repeating-linear-gradient(-45deg, rgba(244, 88, 28, 0.85) 0 7px, transparent 7px 14px);
+}
+.dashed-frame {
+  border: 2px dashed var(--color-line);
+}
+
+/* ---------- motion ---------- */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.96) translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(28px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes feedIn {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes marqueeX {
+  to { transform: translateX(-50%); }
+}
+@keyframes shakeX {
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+@keyframes pulseDot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(18, 147, 111, 0.55); }
+  70% { box-shadow: 0 0 0 8px rgba(18, 147, 111, 0); }
+}
+@keyframes floatY {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-8px); }
+}
+
+.anim-fadeUp { animation: fadeUp 0.55s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-pop { animation: popIn 0.32s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-toast { animation: toastIn 0.3s ease both; }
+.anim-feed { animation: feedIn 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.anim-shake { animation: shakeX 0.45s ease; }
+.anim-float { animation: floatY 5s ease-in-out infinite; }
+.live-dot { animation: pulseDot 1.8s infinite; }
+.marquee-track { animation: marqueeX 30s linear infinite; }
+.marquee:hover .marquee-track { animation-play-state: paused; }
+
+.reveal {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.7s ease, transform 0.7s cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.reveal.in {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- scrollbars ---------- */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: #c9cbbd; border-radius: 8px; border: 3px solid var(--color-paper); }
+*::-webkit-scrollbar-thumb:hover { background: #a9ac9c; }
+
+/* ---------- form base ---------- */
+.field-input {
+  @apply w-full rounded-lg border border-line bg-card px-3.5 py-2.5 text-[15px] text-ink-900 outline-none transition placeholder:text-mute/70 focus:border-safety-500 focus:ring-2 focus:ring-safety-500/20;
+}
+.field-label {
+  @apply mb-1.5 block text-[13px] font-semibold text-ink-800;
+}
