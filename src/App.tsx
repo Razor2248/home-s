@@ -5,6 +5,7 @@ import { useSession } from "./lib/store";
 import type { Role } from "./lib/types";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
+import Docs from "./pages/Docs";
 import CustomerApp from "./pages/customer/CustomerApp";
 import WorkerApp from "./pages/worker/WorkerApp";
 import AdminApp from "./pages/admin/AdminApp";
@@ -38,6 +39,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
+          <Route path="/docs" element={<Docs />} />
           <Route
             path="/app/customer/*"
             element={

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useDB, useSession } from "../lib/store";
 import { cls, fmtK, fmtVND, setIntent, timeAgo, DISTRICTS, JOB_STATUS } from "../lib/format";
 import { CATEGORY_ICON, FALLBACK_ICON, Icon, Logo, type IconName } from "../components/Icons";
@@ -418,7 +418,13 @@ export default function Landing() {
           </div>
         </div>
         <div className="mx-auto mt-10 max-w-[1200px] border-t border-white/10 px-4 pt-6 text-[12.5px] md:px-6">
-          © 2026 Home Services — Đồ án tốt nghiệp · Demo giai đoạn 1, dữ liệu mô phỏng.
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            © 2026 Home Services — Đồ án tốt nghiệp · Demo giai đoạn 1, dữ liệu mô phỏng.
+            <Link to="/docs" className="inline-flex items-center gap-1.5 rounded-lg bg-safety-500/15 px-3 py-1.5 font-mono text-[11.5px] font-bold text-safety-400 transition hover:bg-safety-500 hover:text-white">
+              <Icon name="code" size={13} /> Tài liệu GĐ2: CSDL + API
+              <Icon name="arrowR" size={13} />
+            </Link>
+          </span>
         </div>
       </footer>
     </div>

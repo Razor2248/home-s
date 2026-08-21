@@ -1,0 +1,272 @@
+// ============================================================
+// HOME SERVICES — LƯỢC ĐỒ CSDL (Giai đoạn 2)
+// 14 bảng · PostgreSQL · Prisma ORM
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ------------------------- ENUM -------------------------
+
+enum Role {
+  CUSTOMER
+  WORKER
+  ADMIN
+}
+
+enum JobStatus {
+  OPEN
+  ASSIGNED
+  IN_PROGRESS
+  DONE
+  REVIEWED
+  CANCELLED
+}
+
+enum QuoteStatus {
+  SENT
+  ACCEPTED
+  DECLINED
+}
+
+enum Approval {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum Urgency {
+  NORMAL
+  URGENT
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+}
+
+// ------------------------- BẢNG -------------------------
+
+/// Người dùng — 1 bảng cho cả 3 vai trò (RBAC qua trường role)
+model User {
+  id           String    @id @default(cuid())
+  role         Role
+  name         String
+  email        String    @unique
+  phone        String
+  passwordHash String
+  avatarColor  String    @default("#f4581c")
+  blocked      Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+
+  worker        WorkerProfile?
+  jobs          Job[]            @relation("CustomerJobs")
+  reviews       Review[]         @relation("CustomerReviews")
+  chatMessages  ChatMessage[]
+  notifications Notification[]
+  favorites     Favorite[]
+  refreshTokens RefreshToken[]
+  reports       Report[]         @relation("Reporter")
+
+  @@index([role])
+}
+
+/// Danh mục dịch vụ — id là slug cố định ("dien", "nuoc"...)
+model Category {
+  id       String @id
+  name     String
+  icon     String
+  color    String @default("#f4581c")
+  priceMin Int
+  priceMax Int
+  unit     String @default("lần")
+
+  workers WorkerProfile[]
+  jobs    Job[]
+}
+
+/// Hồ sơ thợ — quan hệ 1-1 với User
+model WorkerProfile {
+  id           String    @id @default(cuid())
+  userId       String    @unique
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  categoryId   String
+  category     Category  @relation(fields: [categoryId], references: [id])
+  district     String
+  yearsExp     Int       @default(0)
+  rating       Float     @default(0)
+  ratingCount  Int       @default(0)
+  jobsDone     Int       @default(0)
+  priceFrom    Int
+  approval     Approval  @default(PENDING)
+  rejectReason String?
+  available    Boolean   @default(true)
+  verified     Boolean   @default(false)
+  bio          String    @default("")
+  responseMins Int       @default(30)
+  badges       String[]  @default([])
+  createdAt    DateTime  @default(now())
+
+  jobs       Job[]           @relation("WorkerJobs")
+  quotes     Quote[]
+  reviews    Review[]        @relation("WorkerReviews")
+  priceList  PriceListItem[]
+  favorites  Favorite[]
+
+  @@index([categoryId, approval, available])
+  @@index([district])
+}
+
+/// Bảng giá theo hạng mục của thợ (1-n)
+model PriceListItem {
+  id       String @id @default(cuid())
+  workerId String
+  worker   WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  label    String
+  price    Int
+  order    Int    @default(0)
+
+  @@index([workerId])
+}
+
+/// Công việc — trung tâm của nền tảng
+model Job {
+  id           String    @id @default(cuid())
+  code         String    @unique // HS-1001
+  customerId   String
+  customer     User      @relation("CustomerJobs", fields: [customerId], references: [id])
+  workerId     String?
+  worker       WorkerProfile? @relation("WorkerJobs", fields: [workerId], references: [id])
+  categoryId   String
+  category     Category  @relation(fields: [categoryId], references: [id])
+  title        String
+  description  String
+  district     String
+  address      String
+  budget       Int
+  urgency      Urgency   @default(NORMAL)
+  status       JobStatus @default(OPEN)
+  scheduledAt  String?
+  cancelReason String?
+  createdAt    DateTime  @default(now())
+  startedAt    DateTime?
+  doneAt       DateTime?
+
+  quotes   Quote[]
+  review   Review?
+  messages ChatMessage[]
+
+  @@index([customerId, status])
+  @@index([workerId, status])
+  @@index([categoryId, status, createdAt])
+}
+
+/// Báo giá — mỗi thợ chỉ 1 báo giá đang chờ cho mỗi việc
+model Quote {
+  id        String      @id @default(cuid())
+  jobId     String
+  job       Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  workerId  String
+  worker    WorkerProfile @relation(fields: [workerId], references: [id])
+  price     Int
+  eta       String
+  message   String
+  status    QuoteStatus @default(SENT)
+  createdAt DateTime    @default(now())
+
+  @@unique([jobId, workerId])
+  @@index([workerId, status])
+}
+
+/// Đánh giá — 1 việc có tối đa 1 đánh giá
+model Review {
+  id         String   @id @default(cuid())
+  jobId      String   @unique
+  job        Job      @relation(fields: [jobId], references: [id])
+  customerId String
+  customer   User     @relation("CustomerReviews", fields: [customerId], references: [id])
+  workerId   String
+  worker     WorkerProfile @relation("WorkerReviews", fields: [workerId], references: [id])
+  rating     Int
+  comment    String
+  flagged    Boolean  @default(false)
+  hidden     Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([workerId, hidden])
+}
+
+/// Tin nhắn chat theo từng việc
+model ChatMessage {
+  id        String   @id @default(cuid())
+  jobId     String
+  job       Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  senderId  String
+  sender    User     @relation(fields: [senderId], references: [id])
+  text      String
+  createdAt DateTime @default(now())
+
+  @@index([jobId, createdAt])
+}
+
+/// Thông báo trong app
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String
+  icon      String   @default("bell")
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId, read, createdAt])
+}
+
+/// Khách hàng lưu thợ yêu thích (n-n)
+model Favorite {
+  customerId String
+  customer   User          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  workerId   String
+  worker     WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  createdAt  DateTime      @default(now())
+
+  @@id([customerId, workerId])
+}
+
+/// Refresh token — lưu DB để có thể thu hồi
+model RefreshToken {
+  id        String   @id @default(cuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+/// Báo cáo vi phạm (đánh giá / thợ)
+model Report {
+  id         String       @id @default(cuid())
+  reporterId String
+  reporter   User         @relation("Reporter", fields: [reporterId], references: [id])
+  targetType String // "review" | "worker"
+  targetId   String
+  reason     String
+  status     ReportStatus @default(OPEN)
+  createdAt  DateTime     @default(now())
+
+  @@index([status, targetType])
+}
+
+/// Cấu hình nền tảng (phí %, hotline...)
+model Setting {
+  key   String @id
+  value String
+}
