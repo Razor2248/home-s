@@ -1,6 +1,8 @@
 import { useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { login, registerCustomer, registerWorker, resetAll } from "../lib/api";
+import { login, logout, registerCustomer, registerWorker, resetAll } from "../lib/api";
+import { remote } from "../lib/remote";
+import { getDataMode, getApiUrl, setDataMode, setApiUrl, type DataMode } from "../lib/config";
 import { useSession } from "../lib/store";
 import { cls, DISTRICTS, takeIntent } from "../lib/format";
 import { Icon, Logo, type IconName } from "../components/Icons";
@@ -25,6 +27,32 @@ export default function Login() {
   const [err, setErr] = useState("");
   const [shake, setShake] = useState(0);
   const [f, setF] = useState({ name: "", email: "", phone: "", password: "", categoryId: "dien", district: DISTRICTS[4], yearsExp: 3, priceFrom: 150000, bio: "" });
+  const [dataMode, setDataModeState] = useState<DataMode>(getDataMode());
+  const [apiUrl, setApiUrlState] = useState(getApiUrl());
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+
+  const switchMode = (m: DataMode) => {
+    setDataModeState(m);
+    setDataMode(m);
+    logout(); // phiên cũ không còn hợp lệ với nguồn dữ liệu mới
+    setErr("");
+    setTestResult(null);
+  };
+
+  const testConn = async () => {
+    setTesting(true);
+    setTestResult(null);
+    setApiUrl(apiUrl);
+    try {
+      const cats = await remote.ping();
+      setTestResult({ ok: true, msg: `Kết nối OK — server có ${cats.length} danh mục dịch vụ.` });
+    } catch (ex) {
+      setTestResult({ ok: false, msg: ex instanceof Error ? ex.message : "Không kết nối được." });
+    } finally {
+      setTesting(false);
+    }
+  };
 
   if (session) {
     // đã đăng nhập thì đưa về đúng vai trò
@@ -122,6 +150,61 @@ export default function Login() {
         <div className="w-full max-w-[440px]">
           <button onClick={() => navigate("/")} className="mb-8 transition hover:opacity-75 lg:hidden"><Logo size={36} /></button>
 
+          {/* chọn nguồn dữ liệu (Giai đoạn 3) */}
+          <div className="mb-4 rounded-2xl bg-ink-900 bg-blueprint-dark p-4 text-paper">
+            <p className="mb-2.5 flex items-center gap-2 font-mono text-[10.5px] font-bold uppercase tracking-[0.18em] text-ink-400">
+              <Icon name="database" size={13} className="text-safety-400" /> Nguồn dữ liệu
+            </p>
+            <div className="flex rounded-xl bg-white/[0.07] p-1">
+              {([
+                { id: "mock" as DataMode, label: "Demo — localStorage", icon: "home" as IconName },
+                { id: "api" as DataMode, label: "Server API — NestJS", icon: "code" as IconName },
+              ]).map((m) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => switchMode(m.id)}
+                  className={cls(
+                    "flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-[12.5px] font-bold transition-all",
+                    dataMode === m.id ? "bg-safety-500 text-white shadow" : "text-ink-400 hover:text-paper",
+                  )}
+                >
+                  <Icon name={m.icon} size={14} /> {m.label}
+                </button>
+              ))}
+            </div>
+            {dataMode === "api" && (
+              <div className="anim-fadeUp mt-3 space-y-2">
+                <div className="flex gap-2">
+                  <input
+                    value={apiUrl}
+                    onChange={(e) => setApiUrlState(e.target.value)}
+                    className="min-w-0 flex-1 rounded-lg border border-white/15 bg-ink-950/60 px-3 py-2 font-mono text-[12.5px] text-paper outline-none transition placeholder:text-ink-400/60 focus:border-safety-500"
+                    placeholder="http://localhost:3001/api/v1"
+                  />
+                  <button
+                    type="button"
+                    onClick={testConn}
+                    disabled={testing}
+                    className="flex items-center gap-1.5 rounded-lg border border-white/15 px-3 py-2 text-[12.5px] font-bold text-paper transition hover:border-safety-500 hover:text-safety-400 disabled:opacity-50"
+                  >
+                    <Icon name="refresh" size={13} className={testing ? "animate-spin" : ""} /> {testing ? "Đang thử…" : "Kiểm tra"}
+                  </button>
+                </div>
+                {testResult && (
+                  <p className={cls("flex items-start gap-1.5 text-[12px] font-semibold", testResult.ok ? "text-good-500" : "text-danger-600")}>
+                    <Icon name={testResult.ok ? "check" : "alert"} size={13} className="mt-0.5 shrink-0" /> {testResult.msg}
+                  </p>
+                )}
+                {!testResult && (
+                  <p className="text-[11.5px] leading-relaxed text-ink-400">
+                    Chạy backend trước: <code className="rounded bg-white/10 px-1 font-mono text-safety-400">cd server && npm run dev</code> — hướng dẫn đầy đủ trong <code className="rounded bg-white/10 px-1 font-mono">server/README.md</code>.
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="rounded-2xl border border-line bg-card p-7 shadow-sm md:p-8">
             <div className="mb-6 flex rounded-xl bg-paper p-1">
               {(["login", "register"] as const).map((m) => (
@@ -211,9 +294,15 @@ export default function Login() {
                 </button>
               ))}
             </div>
-            <button onClick={() => { resetAll(); push("Đã khôi phục dữ liệu demo về ban đầu."); }} className="mt-4 flex w-full items-center justify-center gap-1.5 text-[12.5px] font-semibold text-mute transition hover:text-safety-600">
-              <Icon name="refresh" size={13} /> Khôi phục dữ liệu demo
-            </button>
+            {dataMode === "mock" ? (
+              <button onClick={() => { resetAll(); push("Đã khôi phục dữ liệu demo về ban đầu."); }} className="mt-4 flex w-full items-center justify-center gap-1.5 text-[12.5px] font-semibold text-mute transition hover:text-safety-600">
+                <Icon name="refresh" size={13} /> Khôi phục dữ liệu demo
+              </button>
+            ) : (
+              <p className="mt-4 flex w-full items-center justify-center gap-1.5 text-[12px] font-semibold text-mute">
+                <Icon name="code" size={13} /> Đang dùng dữ liệu thật từ server — 3 tài khoản demo đã được seed sẵn.
+              </p>
+            )}
           </div>
         </div>
       </div>

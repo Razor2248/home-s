@@ -4,7 +4,7 @@ import {
 } from "react";
 import { cls, uid, JOB_STATUS } from "../lib/format";
 import type { JobStatus } from "../lib/types";
-import { Icon, type IconName } from "./Icons";
+import { Icon, Logo, type IconName } from "./Icons";
 
 /* ================= BUTTON ================= */
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -187,6 +187,26 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         ))}
       </div>
     </ToastCtx.Provider>
+  );
+}
+
+/* ================= SYNC SPLASH (chế độ API, chờ tải dữ liệu) ================= */
+export function SyncSplash() {
+  return (
+    <div className="bg-blueprint-dark flex min-h-screen flex-col items-center justify-center gap-5 bg-ink-950 px-6 text-center">
+      <Logo size={46} dark />
+      <div className="flex items-center gap-2.5 font-mono text-[13px] font-bold text-paper">
+        <svg width="17" height="17" viewBox="0 0 24 24" className="animate-spin text-safety-400" fill="none">
+          <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.25" strokeWidth="3" />
+          <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+        </svg>
+        Đang đồng bộ dữ liệu từ server…
+      </div>
+      <p className="max-w-sm text-[12px] leading-relaxed text-ink-400">
+        Nếu chờ quá lâu, kiểm tra backend đã chạy chưa — hoặc chuyển sang chế độ Demo ở trang đăng nhập.
+      </p>
+      <div className="stripes h-1.5 w-40 rounded-full opacity-70" />
+    </div>
   );
 }
 

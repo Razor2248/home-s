@@ -1,7 +1,18 @@
-import { getDB, mutate, resetDemo, setSession } from "./store";
+/**
+ * Lớp dịch vụ (Giai đoạn 3) — mỗi hàm tự định tuyến:
+ *   chế độ "api"  → gọi backend NestJS (src/lib/remote.ts) rồi đồng bộ store
+ *   chế độ "mock" → thao tác trực tiếp localStorage (demo không cần server)
+ * UI gọi đúng các hàm này, KHÔNG cần biết dữ liệu đến từ đâu.
+ */
+import { getDB, getSessionId, hydrateDB, mutate, resetDemo, setSession } from "./store";
 import { uid, pickColor } from "./format";
+import { isApiMode, setApiStatus } from "./config";
+import {
+  fetchSnapshot, login as remoteLogin, logoutRemote, mapJob, remote,
+  registerCustomer as remoteRegisterCustomer, registerWorker as remoteRegisterWorker,
+} from "./remote";
 import type {
-  BookInput, Category, CreateJobInput, Job, Quote, User, WorkerProfile, WorkerRegisterInput,
+  BookInput, Category, CreateJobInput, DB, Job, Quote, Role, User, WorkerProfile, WorkerRegisterInput,
 } from "./types";
 
 const delay = (ms = 380) => new Promise((r) => setTimeout(r, ms));
@@ -13,8 +24,33 @@ function pushNotif(d: { users: User[]; notifications: import("./types").Notifica
   ];
 }
 
+/* ================= ĐỒNG BỘ SERVER → STORE ================= */
+export async function syncFromServer(silent = true): Promise<void> {
+  if (!isApiMode() || !getSessionId()) return;
+  setApiStatus("syncing");
+  try {
+    const local = getDB().users.find((u) => u.id === getSessionId());
+    let role: Role | undefined = local?.role;
+    if (!role) role = (await remote.me()).role;
+    const snap = await fetchSnapshot(role);
+    hydrateDB(snap);
+    setApiStatus("ok");
+  } catch (e) {
+    setApiStatus("error", e instanceof Error ? e.message : "Không đồng bộ được với máy chủ.");
+    if (!silent) throw e;
+  }
+}
+
+const after = () => syncFromServer(true);
+
 /* ================= AUTH ================= */
 export async function login(email: string, password: string): Promise<User> {
+  if (isApiMode()) {
+    const u = await remoteLogin(email, password);
+    setSession(u.id);
+    await syncFromServer(false);
+    return u;
+  }
   await delay();
   const u = getDB().users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
   if (!u) throw new Error("Email không tồn tại trong hệ thống.");
@@ -25,10 +61,17 @@ export async function login(email: string, password: string): Promise<User> {
 }
 
 export function logout() {
+  if (isApiMode()) logoutRemote();
   setSession(null);
 }
 
 export async function registerCustomer(d: { name: string; email: string; phone: string; password: string }): Promise<User> {
+  if (isApiMode()) {
+    const u = await remoteRegisterCustomer(d);
+    setSession(u.id);
+    await syncFromServer(false);
+    return u;
+  }
   await delay();
   if (getDB().users.some((u) => u.email.toLowerCase() === d.email.trim().toLowerCase()))
     throw new Error("Email đã được sử dụng.");
@@ -44,6 +87,12 @@ export async function registerCustomer(d: { name: string; email: string; phone: 
 }
 
 export async function registerWorker(d: WorkerRegisterInput): Promise<User> {
+  if (isApiMode()) {
+    const u = await remoteRegisterWorker(d);
+    setSession(u.id);
+    await syncFromServer(false);
+    return u;
+  }
   await delay();
   if (getDB().users.some((u) => u.email.toLowerCase() === d.email.trim().toLowerCase()))
     throw new Error("Email đã được sử dụng.");
@@ -69,6 +118,10 @@ export async function registerWorker(d: WorkerRegisterInput): Promise<User> {
 
 /* ================= WORKERS ================= */
 export async function toggleAvailable(workerId: string) {
+  if (isApiMode()) {
+    await remote.toggleAvailable();
+    return after();
+  }
   await delay(250);
   mutate((db) => {
     db.workers = db.workers.map((w) => (w.id === workerId ? { ...w, available: !w.available } : w));
@@ -76,6 +129,10 @@ export async function toggleAvailable(workerId: string) {
 }
 
 export async function updateWorkerProfile(workerId: string, patch: Partial<WorkerProfile>) {
+  if (isApiMode()) {
+    await remote.updateMyProfile(patch);
+    return after();
+  }
   await delay(300);
   mutate((db) => {
     db.workers = db.workers.map((w) => (w.id === workerId ? { ...w, ...patch } : w));
@@ -83,6 +140,11 @@ export async function updateWorkerProfile(workerId: string, patch: Partial<Worke
 }
 
 export async function toggleFavorite(userId: string, workerId: string) {
+  if (isApiMode()) {
+    const has = getDB().users.find((u) => u.id === userId)?.favorites.includes(workerId) ?? false;
+    await remote.setFavorite(workerId, !has);
+    return after();
+  }
   await delay(200);
   mutate((db) => {
     db.users = db.users.map((u) => {
@@ -94,6 +156,10 @@ export async function toggleFavorite(userId: string, workerId: string) {
 }
 
 export async function approveWorker(workerId: string) {
+  if (isApiMode()) {
+    await remote.approveWorker(workerId);
+    return after();
+  }
   await delay(300);
   mutate((db) => {
     const w = db.workers.find((x) => x.id === workerId);
@@ -103,6 +169,10 @@ export async function approveWorker(workerId: string) {
 }
 
 export async function rejectWorker(workerId: string, reason: string) {
+  if (isApiMode()) {
+    await remote.rejectWorker(workerId, reason);
+    return after();
+  }
   await delay(300);
   mutate((db) => {
     const w = db.workers.find((x) => x.id === workerId);
@@ -119,6 +189,12 @@ function nextCode(db: { seq: number }) {
 }
 
 export async function createJob(input: CreateJobInput): Promise<Job> {
+  if (isApiMode()) {
+    const raw = await remote.createJob({ ...input, urgency: input.urgency.toUpperCase() });
+    const job = mapJob(raw, { quotes: [], reviews: [], users: [] });
+    await after();
+    return job;
+  }
   await delay();
   const job: Job = {
     id: uid("j"), code: nextCode(getDB()), customerId: input.customerId, title: input.title.trim(),
@@ -136,6 +212,15 @@ export async function createJob(input: CreateJobInput): Promise<Job> {
 }
 
 export async function bookDirect(input: BookInput): Promise<Job> {
+  if (isApiMode()) {
+    const raw = await remote.bookDirect({
+      workerId: input.workerId, categoryId: input.categoryId, district: input.district,
+      address: input.address, scheduledAt: input.scheduledAt, note: input.note, budget: input.budget,
+    });
+    const job = mapJob(raw, { quotes: [], reviews: [], users: [] });
+    await after();
+    return job;
+  }
   await delay();
   const w = getDB().workers.find((x) => x.id === input.workerId);
   const job: Job = {
@@ -158,6 +243,11 @@ export async function bookDirect(input: BookInput): Promise<Job> {
 }
 
 export async function sendQuote(jobId: string, workerId: string, d: { price: number; eta: string; message: string }): Promise<Quote> {
+  if (isApiMode()) {
+    await remote.sendQuote(jobId, d);
+    await after();
+    return { id: "server", jobId, workerId, ...d, status: "sent", createdAt: Date.now() };
+  }
   await delay();
   if (getDB().quotes.some((q) => q.jobId === jobId && q.workerId === workerId && q.status !== "declined"))
     throw new Error("Bạn đã gửi báo giá cho việc này rồi.");
@@ -172,6 +262,10 @@ export async function sendQuote(jobId: string, workerId: string, d: { price: num
 }
 
 export async function acceptQuote(quoteId: string) {
+  if (isApiMode()) {
+    await remote.acceptQuote(quoteId);
+    return after();
+  }
   await delay();
   mutate((db) => {
     const q = db.quotes.find((x) => x.id === quoteId);
@@ -190,6 +284,10 @@ export async function acceptQuote(quoteId: string) {
 }
 
 export async function startJob(jobId: string) {
+  if (isApiMode()) {
+    await remote.startJob(jobId);
+    return after();
+  }
   await delay(300);
   mutate((db) => {
     db.jobs = db.jobs.map((j) => (j.id === jobId ? { ...j, status: "in_progress", startedAt: Date.now() } : j));
@@ -199,6 +297,10 @@ export async function startJob(jobId: string) {
 }
 
 export async function completeJob(jobId: string) {
+  if (isApiMode()) {
+    await remote.completeJob(jobId);
+    return after();
+  }
   await delay(300);
   mutate((db) => {
     db.jobs = db.jobs.map((j) => (j.id === jobId ? { ...j, status: "done", doneAt: Date.now() } : j));
@@ -208,6 +310,10 @@ export async function completeJob(jobId: string) {
 }
 
 export async function cancelJob(jobId: string, reason: string) {
+  if (isApiMode()) {
+    await remote.cancelJob(jobId, reason);
+    return after();
+  }
   await delay(300);
   mutate((db) => {
     db.jobs = db.jobs.map((j) => (j.id === jobId ? { ...j, status: "cancelled", cancelReason: reason || "Khách hàng chủ động hủy" } : j));
@@ -220,6 +326,10 @@ export async function cancelJob(jobId: string, reason: string) {
 }
 
 export async function reviewJob(jobId: string, customerId: string, rating: number, comment: string) {
+  if (isApiMode()) {
+    await remote.reviewJob(jobId, rating, comment);
+    return after();
+  }
   await delay();
   mutate((db) => {
     const job = db.jobs.find((j) => j.id === jobId);
@@ -241,6 +351,10 @@ export async function reviewJob(jobId: string, customerId: string, rating: numbe
 
 /* ================= CHAT & NOTIFICATIONS ================= */
 export async function sendChat(jobId: string, senderId: string, text: string) {
+  if (isApiMode()) {
+    await remote.sendMessage(jobId, text);
+    return after();
+  }
   await delay(180);
   mutate((db) => {
     db.chats = [...db.chats, { id: uid("m"), jobId, senderId, text: text.trim(), createdAt: Date.now() }];
@@ -248,6 +362,14 @@ export async function sendChat(jobId: string, senderId: string, text: string) {
 }
 
 export function markAllRead(userId: string) {
+  if (isApiMode()) {
+    // optimistic: cập nhật ngay trên store, rồi đẩy lên server
+    mutate((db) => {
+      db.notifications = db.notifications.map((n) => (n.userId === userId ? { ...n, read: true } : n));
+    });
+    remote.markAllRead().then(() => syncFromServer(true)).catch(() => {});
+    return;
+  }
   mutate((db) => {
     db.notifications = db.notifications.map((n) => (n.userId === userId ? { ...n, read: true } : n));
   });
@@ -255,6 +377,10 @@ export function markAllRead(userId: string) {
 
 /* ================= ADMIN ================= */
 export async function blockUser(userId: string, blocked: boolean) {
+  if (isApiMode()) {
+    await remote.blockUser(userId, blocked);
+    return after();
+  }
   await delay(300);
   mutate((db) => {
     db.users = db.users.map((u) => (u.id === userId ? { ...u, blocked } : u));
@@ -262,6 +388,10 @@ export async function blockUser(userId: string, blocked: boolean) {
 }
 
 export async function addCategory(d: { name: string; icon: string; color: string; priceMin: number; priceMax: number; unit: string }) {
+  if (isApiMode()) {
+    await remote.addCategory(d);
+    return after();
+  }
   await delay(300);
   mutate((db) => {
     db.categories = [...db.categories, { id: uid("c"), ...d } as Category];
@@ -269,6 +399,10 @@ export async function addCategory(d: { name: string; icon: string; color: string
 }
 
 export async function updateCategory(id: string, patch: Partial<Category>) {
+  if (isApiMode()) {
+    await remote.updateCategory(id, patch);
+    return after();
+  }
   await delay(250);
   mutate((db) => {
     db.categories = db.categories.map((c) => (c.id === id ? { ...c, ...patch } : c));
@@ -276,6 +410,10 @@ export async function updateCategory(id: string, patch: Partial<Category>) {
 }
 
 export async function deleteCategory(id: string) {
+  if (isApiMode()) {
+    await remote.deleteCategory(id);
+    return after();
+  }
   await delay(250);
   const db = getDB();
   const used = db.workers.some((w) => w.categoryId === id) || db.jobs.some((j) => j.categoryId === id);
@@ -286,6 +424,10 @@ export async function deleteCategory(id: string) {
 }
 
 export async function resolveReview(reviewId: string, action: "keep" | "hide") {
+  if (isApiMode()) {
+    await remote.resolveReview(reviewId, action);
+    return after();
+  }
   await delay(250);
   mutate((db) => {
     db.reviews = db.reviews.map((r) => (r.id === reviewId ? { ...r, flagged: false, hidden: action === "hide" } : r));
@@ -312,3 +454,6 @@ export function estimateForCategory(categoryId: string): { min: number; max: num
 export function resetAll() {
   resetDemo();
 }
+
+/* tái xuất để nơi khác dùng khi cần kiểu DB */
+export type { DB };

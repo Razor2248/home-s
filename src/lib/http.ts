@@ -3,8 +3,11 @@
  * Cách dùng: thay ruột các hàm trong src/lib/api.ts bằng http.get/post/...
  * Token JWT lấy từ localStorage; lỗi trả về message tiếng Việt từ server.
  */
+import { getApiUrl } from "./config";
+
 const env = (import.meta as unknown as { env?: Record<string, string> }).env ?? {};
 export const API_BASE = env.VITE_API_URL ?? "http://localhost:3001/api/v1";
+const base = () => getApiUrl() || API_BASE;
 
 export const TOKEN_KEY = "hs_access_token";
 export const REFRESH_KEY = "hs_refresh_token";
@@ -26,7 +29,7 @@ async function request<T>(path: string, opts: { method?: string; body?: unknown;
   }
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetch(`${base()}${path}`, {
       method: opts.method ?? "GET",
       headers,
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,

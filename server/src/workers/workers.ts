@@ -42,7 +42,7 @@ export class WorkersController {
         ...(q.district ? { district: q.district } : {}),
         ...(q.q ? { name: { contains: q.q, mode: "insensitive" } } : {}),
       },
-      include: { category: true },
+      include: { category: true, user: { select: { name: true } } },
       orderBy:
         q.sort === "price" ? { priceFrom: "asc" }
           : q.sort === "exp" ? { yearsExp: "desc" }
@@ -75,7 +75,7 @@ export class WorkersController {
   async mine(@CurrentUser() u: AuthUser) {
     const w = await this.prisma.workerProfile.findUnique({
       where: { userId: u.sub },
-      include: { category: true, priceList: { orderBy: { order: "asc" } } },
+      include: { category: true, user: { select: { name: true } }, priceList: { orderBy: { order: "asc" } } },
     });
     if (!w) throw new BizError("Chưa có hồ sơ thợ.", 404);
     return w;

@@ -246,7 +246,7 @@ const KEY_CLS: Record<string, string> = {
 
 /* ================= TRANG ================= */
 export default function Docs() {
-  const [tab, setTab] = useState<"arch" | "erd" | "api" | "flow">("erd");
+  const [tab, setTab] = useState<"arch" | "erd" | "api" | "flow" | "connect">("erd");
   const [q, setQ] = useState("");
 
   const apiFiltered = useMemo(
@@ -264,6 +264,7 @@ export default function Docs() {
     { id: "api" as const, label: "REST API", icon: "code" as IconName },
     { id: "arch" as const, label: "Kiến trúc", icon: "layers" as IconName },
     { id: "flow" as const, label: "Luồng nghiệp vụ", icon: "refresh" as IconName },
+    { id: "connect" as const, label: "Tích hợp GĐ3", icon: "code" as IconName },
   ];
 
   return (
@@ -475,6 +476,131 @@ export default function Docs() {
             <div className="mt-8 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-ink-900/70 px-5 py-4">
               <p className="text-[13.5px] text-ink-400"><b className="text-paper">Trạng thái việc:</b> <code className="font-mono text-[12.5px] text-safety-400">OPEN → ASSIGNED → IN_PROGRESS → DONE → REVIEWED</code> (hoặc <code className="font-mono text-[12.5px] text-danger-600">CANCELLED</code>)</p>
               <Link to="/" className="flex items-center gap-1.5 text-[13.5px] font-bold text-safety-400 transition hover:text-safety-500">Xem bản demo hoạt động <Icon name="arrowR" size={15} /></Link>
+            </div>
+          </div>
+        )}
+
+        {/* ================= TÍCH HỢP GĐ3 ================= */}
+        {tab === "connect" && (
+          <div className="anim-fadeUp">
+            <h1 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] font-extrabold text-white">Tích hợp frontend ↔ backend</h1>
+            <p className="mt-1 mb-8 max-w-3xl text-[14px] leading-relaxed text-ink-400">
+              Giai đoạn 3 giữ nguyên toàn bộ giao diện, chỉ thay <b className="text-paper">nguồn dữ liệu</b>. Ứng dụng chạy được ở 2 chế độ và
+              chuyển đổi ngay trên màn hình đăng nhập — không cần build lại.
+            </p>
+
+            {/* 2 chế độ */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-ink-900/70 p-6 transition hover:border-white/25">
+                <p className="flex items-center gap-2.5 font-display text-[16.5px] font-bold text-white">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-400/20 text-ink-400"><Icon name="home" size={17} /></span>
+                  Chế độ Demo — localStorage
+                </p>
+                <ul className="mt-4 space-y-2 text-[13px] leading-relaxed text-ink-400">
+                  <li>• Mặc định khi chưa cấu hình <code className="font-mono text-safety-400">VITE_API_URL</code>.</li>
+                  <li>• Mọi thao tác đi qua <code className="font-mono text-[12.5px]">src/lib/api.ts</code> → store phản ứng <code className="font-mono text-[12.5px]">useSyncExternalStore</code>.</li>
+                  <li>• Dữ liệu bền vững trong trình duyệt, có nút khôi phục demo.</li>
+                  <li>• Dùng để chấm demo, bảo vệ đồ án khi không có mạng/server.</li>
+                </ul>
+              </div>
+              <div className="rounded-xl border border-safety-500/40 bg-safety-500/[0.07] p-6 transition hover:border-safety-500">
+                <p className="flex items-center gap-2.5 font-display text-[16.5px] font-bold text-white">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-safety-500/20 text-safety-400"><Icon name="code" size={17} /></span>
+                  Chế độ Server API — NestJS
+                </p>
+                <ul className="mt-4 space-y-2 text-[13px] leading-relaxed text-ink-400">
+                  <li>• Chọn “Server API” ở màn hình đăng nhập, nhập địa chỉ (mặc định <code className="font-mono text-safety-400">localhost:3001/api/v1</code>), bấm Kiểm tra.</li>
+                  <li>• Đăng nhập nhận JWT, mỗi thao tác gọi REST endpoint tương ứng rồi <b className="text-paper">hydrate</b> lại store.</li>
+                  <li>• Tự đồng bộ mỗi 25 giây + khi quay lại tab (polling — bản cuối thay bằng Socket.io).</li>
+                  <li>• Pill trạng thái trên topbar: xanh = kết nối tốt, đỏ = lỗi (kèm thông điệp).</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* pipeline */}
+            <h2 className="mt-10 mb-4 flex items-center gap-2 font-display text-[19px] font-bold text-white">
+              <span className="h-[3px] w-6 rounded-full bg-safety-500" /> Vòng đời dữ liệu ở chế độ API
+            </h2>
+            <div className="overflow-hidden rounded-xl border border-white/10">
+              {[
+                { t: "UI gọi hàm nghiệp vụ", d: "VD: acceptQuote(id) — component KHÔNG biết dữ liệu đến từ đâu, gọi đúng src/lib/api.ts như chế độ Demo." },
+                { t: "Bộ định tuyến kiểm tra chế độ", d: "isApiMode() → chuyển sang remote.acceptQuote(id): POST /api/v1/quotes/:id/accept kèm Bearer token." },
+                { t: "Backend xử lý + transaction", d: "NestJS cập nhật Quote/Job/Notification trong một transaction, trả về kết quả hoặc lỗi nghiệp vụ tiếng Việt." },
+                { t: "syncFromServer()", d: "fetchSnapshot(role) gom categories, jobs, quotes, reviews, chats, notifications… theo đúng vai trò đang đăng nhập." },
+                { t: "hydrateDB(snapshot)", d: "Nạp dữ liệu server vào store — useSyncExternalStore khiến mọi màn hình tự vẽ lại, xong. Toàn bộ UI giữ nguyên 100%." },
+              ].map((s, i, arr) => (
+                <div key={s.t} className={cls("flex gap-4 bg-ink-900/70 px-5 py-4", i > 0 && "border-t border-white/[0.06]")}>
+                  <div className="flex flex-col items-center">
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-safety-500 font-mono text-[12px] font-bold text-white">{i + 1}</span>
+                    {i < arr.length - 1 && <span className="mt-1 w-[2px] flex-1 bg-safety-500/30" />}
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-bold text-white">{s.t}</p>
+                    <p className="mt-0.5 text-[13px] leading-relaxed text-ink-400">{s.d}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* mapping */}
+            <h2 className="mt-10 mb-4 flex items-center gap-2 font-display text-[19px] font-bold text-white">
+              <span className="h-[3px] w-6 rounded-full bg-safety-500" /> Bảng ánh xạ thao tác → endpoint
+            </h2>
+            <div className="overflow-hidden rounded-xl border border-white/10">
+              {[
+                ["Đăng nhập", "login()", "POST /auth/login → lưu JWT"],
+                ["Đăng việc", "createJob()", "POST /jobs"],
+                ["Gửi báo giá", "sendQuote()", "POST /jobs/:id/quotes"],
+                ["Chốt thợ", "acceptQuote()", "POST /quotes/:id/accept"],
+                ["Bắt đầu / hoàn thành", "startJob() · completeJob()", "POST /jobs/:id/start · /complete"],
+                ["Đánh giá", "reviewJob()", "POST /jobs/:id/review"],
+                ["Đặt lịch trực tiếp", "bookDirect()", "POST /jobs/book"],
+                ["Chat", "sendChat()", "POST /jobs/:id/messages"],
+                ["Duyệt / từ chối thợ", "approveWorker() · rejectWorker()", "POST /admin/workers/:id/approve · /reject"],
+                ["Khóa người dùng", "blockUser()", "PATCH /admin/users/:id/block"],
+                ["CRUD danh mục", "addCategory() …", "POST · PUT · DELETE /admin/categories"],
+              ].map(([op, fn, ep], i) => (
+                <div key={op} className={cls("grid grid-cols-[1.1fr_1fr_1.4fr] items-center gap-3 bg-ink-900/70 px-5 py-3", i > 0 && "border-t border-white/[0.06]")}>
+                  <span className="text-[13px] font-bold text-paper">{op}</span>
+                  <code className="font-mono text-[12px] text-safety-400">{fn}</code>
+                  <code className="truncate font-mono text-[12px] text-ink-400">{ep}</code>
+                </div>
+              ))}
+            </div>
+
+            {/* chạy 2 terminal */}
+            <h2 className="mt-10 mb-4 flex items-center gap-2 font-display text-[19px] font-bold text-white">
+              <span className="h-[3px] w-6 rounded-full bg-safety-500" /> Chạy toàn hệ thống (2 terminal)
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              {[
+                { t: "Terminal 1 — Backend", cmds: ["cd server", "cp .env.example .env", "npm install && npx prisma migrate dev", "npm run seed   # dữ liệu demo khớp frontend", "npm run dev    # → localhost:3001"] },
+                { t: "Terminal 2 — Frontend", cmds: ["(gốc dự án)", "cp .env.example .env   # bỏ comment VITE_API_URL", "npm install", "npm run dev    # → localhost:5173"] },
+              ].map((b) => (
+                <div key={b.t} className="rounded-xl border border-white/10 bg-ink-950 p-5">
+                  <p className="mb-3 flex items-center gap-2 font-mono text-[12px] font-bold uppercase tracking-wider text-safety-400">
+                    <Icon name="code" size={14} /> {b.t}
+                  </p>
+                  <div className="space-y-1.5 font-mono text-[12.5px] text-paper">
+                    {b.cmds.map((c) => (
+                      <p key={c} className="flex gap-2"><span className="select-none text-good-500">$</span>{c}</p>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-8 grid gap-3 md:grid-cols-3">
+              {[
+                { t: "Đổi chế độ = đăng xuất", d: "Chuyển Demo ↔ API tự đăng xuất để tránh lệch ID người dùng giữa hai nguồn." },
+                { t: "Lỗi hiển thị tiếng Việt", d: "ApiError lấy message từ backend (ValidationPipe + BizError) — người dùng đọc hiểu ngay." },
+                { t: "Không lock-in", d: "Bỏ remote.ts và các nhánh isApiMode() là quay về bản demo thuần — không file UI nào bị sửa ở GĐ3." },
+              ].map((n) => (
+                <div key={n.t} className="rounded-xl border border-white/10 bg-ink-900/60 p-4">
+                  <p className="text-[13.5px] font-bold text-paper">{n.t}</p>
+                  <p className="mt-1 text-[12.5px] leading-relaxed text-ink-400">{n.d}</p>
+                </div>
+              ))}
             </div>
           </div>
         )}

@@ -1,7 +1,9 @@
 import { useEffect, type ReactElement } from "react";
 import { HashRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
-import { ToastProvider } from "./components/ui";
-import { useSession } from "./lib/store";
+import { SyncSplash, ToastProvider } from "./components/ui";
+import { getSessionId, useSession } from "./lib/store";
+import { isApiMode } from "./lib/config";
+import { syncFromServer } from "./lib/api";
 import type { Role } from "./lib/types";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
@@ -18,7 +20,11 @@ const ROLE_HOME: Record<Role, string> = {
 
 function RequireRole({ role, children }: { role: Role; children: ReactElement }) {
   const session = useSession();
-  if (!session) return <Navigate to="/login" replace />;
+  if (!session) {
+    // Chế độ API: phiên còn trên localStorage nhưng dữ liệu chưa kịp tải về
+    if (isApiMode() && getSessionId()) return <SyncSplash />;
+    return <Navigate to="/login" replace />;
+  }
   if (session.role !== role) return <Navigate to={ROLE_HOME[session.role]} replace />;
   return children;
 }
@@ -31,11 +37,30 @@ function ScrollTop() {
   return null;
 }
 
+/** Chế độ API: đồng bộ dữ liệu server → store định kỳ và khi quay lại tab */
+function ApiSync() {
+  const session = useSession();
+  const sessionId = session?.id ?? null;
+  useEffect(() => {
+    if (!isApiMode() || !sessionId) return;
+    syncFromServer(true);
+    const t = setInterval(() => syncFromServer(true), 25000);
+    const onFocus = () => syncFromServer(true);
+    window.addEventListener("focus", onFocus);
+    return () => {
+      clearInterval(t);
+      window.removeEventListener("focus", onFocus);
+    };
+  }, [sessionId]);
+  return null;
+}
+
 export default function App() {
   return (
     <ToastProvider>
       <HashRouter>
         <ScrollTop />
+        <ApiSync />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />

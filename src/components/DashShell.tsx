@@ -1,10 +1,11 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { useDB, useSession } from "../lib/store";
 import { logout, markAllRead } from "../lib/api";
+import { getApiStatus, getDataMode, shortHost, subscribeApiStatus, getApiUrl } from "../lib/config";
 import { cls, timeAgo } from "../lib/format";
 import { Icon, Logo, type IconName } from "./Icons";
-import { Avatar } from "./ui";
+import { Avatar, SyncSplash } from "./ui";
 import type { Role } from "../lib/types";
 
 export interface NavItem {
@@ -23,11 +24,18 @@ const ROLE_META: Record<Role, { label: string; cls: string }> = {
 
 export function DashShell({ role, nav, children }: { role: Role; nav: NavItem[]; children: ReactNode }) {
   const db = useDB();
-  const user = useSession()!;
+  const user = useSession();
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [bellOpen, setBellOpen] = useState(false);
+  const [, force] = useState(0);
+  useEffect(() => subscribeApiStatus(() => force((x) => x + 1)), []);
+  const dataMode = getDataMode();
+  const apiStatus = getApiStatus();
+
+  // Chế độ API: user chưa kịp hydrate từ server thì hiển thị màn hình chờ
+  if (!user) return <SyncSplash />;
 
   const notifs = db.notifications.filter((n) => n.userId === user.id).slice(0, 9);
   const unread = db.notifications.filter((n) => n.userId === user.id && !n.read).length;
@@ -118,6 +126,31 @@ export function DashShell({ role, nav, children }: { role: Role; nav: NavItem[];
               {new Date().toLocaleDateString("vi-VN", { weekday: "long", day: "2-digit", month: "long", year: "numeric" })}
             </p>
           </div>
+
+          {/* trạng thái nguồn dữ liệu (Giai đoạn 3) */}
+          <span
+            title={
+              dataMode === "mock"
+                ? "Dữ liệu demo lưu trong trình duyệt. Đổi sang Server API ở trang đăng nhập."
+                : apiStatus.msg || `Dữ liệu thật từ ${getApiUrl()}`
+            }
+            className={cls(
+              "hidden items-center gap-1.5 rounded-lg border px-2.5 py-1.5 font-mono text-[11px] font-bold md:inline-flex",
+              dataMode === "mock"
+                ? "border-line bg-card text-mute"
+                : apiStatus.s === "error"
+                  ? "border-danger-600/40 bg-danger-100 text-danger-600"
+                  : "border-good-500/40 bg-good-100 text-good-700",
+            )}
+          >
+            <span
+              className={cls(
+                "h-2 w-2 rounded-full",
+                dataMode === "mock" ? "bg-mute/60" : apiStatus.s === "error" ? "bg-danger-600" : apiStatus.s === "syncing" ? "live-dot bg-warn-600" : "live-dot bg-good-500",
+              )}
+            />
+            {dataMode === "mock" ? "DEMO" : apiStatus.s === "error" ? "API LỖI" : `API · ${shortHost(getApiUrl())}`}
+          </span>
 
           {/* bell */}
           <div className="relative">

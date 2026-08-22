@@ -52,6 +52,21 @@ export class AdminController {
     };
   }
 
+  /* ---------- Việc (cho dashboard & đồng bộ frontend) ---------- */
+  @Get("jobs")
+  jobs(@Query("limit") limit?: string) {
+    return this.prisma.job.findMany({
+      take: Number(limit) || 50,
+      orderBy: { createdAt: "desc" },
+      include: {
+        category: true,
+        customer: { select: { id: true, name: true, avatarColor: true } },
+        worker: { select: { id: true, name: true } },
+        quotes: true,
+      },
+    });
+  }
+
   /* ---------- Duyệt thợ ---------- */
   @Get("workers")
   workers(@Query("approval") approval?: string) {
@@ -85,7 +100,7 @@ export class AdminController {
         ...(q ? { OR: [{ name: { contains: q, mode: "insensitive" } }, { email: { contains: q, mode: "insensitive" } }] } : {}),
       },
       orderBy: { createdAt: "desc" },
-      select: { id: true, role: true, name: true, email: true, phone: true, blocked: true, createdAt: true },
+      select: { id: true, role: true, name: true, email: true, phone: true, blocked: true, avatarColor: true, createdAt: true },
     });
   }
 

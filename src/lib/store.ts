@@ -78,6 +78,29 @@ export function useSession(): User | null {
   return db.users.find((u) => u.id === id) ?? null;
 }
 
+/**
+ * Nạp dữ liệu từ server vào store (chế độ API).
+ * users được gộp theo id (giữ bản server), các collection khác thay mới.
+ */
+export function hydrateDB(partial: Partial<DB>) {
+  mutate((d) => {
+    if (partial.users) {
+      const serverUsers = new Map(partial.users.map((u) => [u.id, u]));
+      d.users = [
+        ...partial.users,
+        ...d.users.filter((u) => !serverUsers.has(u.id)),
+      ];
+    }
+    if (partial.categories) d.categories = partial.categories;
+    if (partial.workers) d.workers = partial.workers;
+    if (partial.jobs) d.jobs = partial.jobs;
+    if (partial.quotes) d.quotes = partial.quotes;
+    if (partial.reviews) d.reviews = partial.reviews;
+    if (partial.chats) d.chats = partial.chats;
+    if (partial.notifications) d.notifications = partial.notifications;
+  });
+}
+
 export function resetDemo() {
   state = seedDB();
   try {
