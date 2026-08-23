@@ -161,6 +161,7 @@ model Job {
   quotes   Quote[]
   review   Review?
   messages ChatMessage[]
+  payment  Payment?
 
   @@index([customerId, status])
   @@index([workerId, status])
@@ -269,4 +270,26 @@ model Report {
 model Setting {
   key   String @id
   value String
+}
+
+/// Thanh toán (sandbox mô phỏng VNPay) — mỗi việc 1 giao dịch
+model Payment {
+  id         String    @id @default(cuid())
+  jobId      String    @unique
+  job        Job       @relation(fields: [jobId], references: [id])
+  customerId String
+  amount     Int
+  method     String // "vnpay_qr" | "vnpay_card" | "cod"
+  txnRef     String    @unique // HS-1003-1706xxx
+  status     PaymentStatus @default(PENDING)
+  createdAt  DateTime  @default(now())
+  paidAt     DateTime?
+
+  @@index([customerId, status])
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }

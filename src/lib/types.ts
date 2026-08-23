@@ -3,6 +3,20 @@ export type JobStatus = "open" | "assigned" | "in_progress" | "done" | "reviewed
 export type QuoteStatus = "sent" | "accepted" | "declined";
 export type Approval = "pending" | "approved" | "rejected";
 export type Urgency = "normal" | "urgent";
+export type PaymentStatus = "pending" | "success" | "failed";
+export type PaymentMethod = "vnpay_qr" | "vnpay_card" | "cod";
+
+export interface Payment {
+  id: string;
+  jobId: string;
+  customerId: string;
+  amount: number;
+  method: PaymentMethod;
+  txnRef: string;
+  status: PaymentStatus;
+  createdAt: number;
+  paidAt?: number;
+}
 
 export interface Category {
   id: string;
@@ -123,6 +137,7 @@ export interface DB {
   reviews: Review[];
   chats: ChatMessage[];
   notifications: Notification[];
+  payments: Payment[];
 }
 
 export interface CreateJobInput {

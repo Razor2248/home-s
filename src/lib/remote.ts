@@ -6,7 +6,7 @@
 import { http, TOKEN_KEY, REFRESH_KEY } from "./http";
 import { pickColor } from "./format";
 import type {
-  Category, ChatMessage, DB, Job, Notification, Quote, Review, Role, User, WorkerProfile, WorkerRegisterInput,
+  Category, ChatMessage, DB, Job, Notification, Payment, Quote, Review, Role, User, WorkerProfile, WorkerRegisterInput,
 } from "./types";
 
 /* ================= mapper: server → UI ================= */
@@ -85,6 +85,14 @@ export function mapNotif(n: Any): Notification {
   return { id: n.id, userId: n.userId, text: n.text, icon: n.icon ?? "bell", read: n.read ?? false, createdAt: ts(n.createdAt) ?? Date.now() };
 }
 
+export function mapPayment(p: Any): Payment {
+  return {
+    id: p.id, jobId: p.jobId, customerId: p.customerId, amount: p.amount,
+    method: low(p.method ?? "vnpay_qr"), txnRef: p.txnRef ?? "", status: low(p.status ?? "PENDING"),
+    createdAt: ts(p.createdAt) ?? Date.now(), paidAt: ts(p.paidAt),
+  };
+}
+
 /* ================= auth ================= */
 export async function login(email: string, password: string): Promise<User> {
   const r = await http.post<{ accessToken: string; refreshToken: string }>("/auth/login", { email, password });
@@ -144,6 +152,12 @@ export const remote = {
   sendMessage: (jobId: string, text: string) => http.post(`/jobs/${jobId}/messages`, { text }),
   markAllRead: () => http.post("/notifications/read-all", {}),
 
+  /* ---- thanh toán sandbox (Giai đoạn 4) ---- */
+  createPayment: (jobId: string, method: string) => http.post<Any>("/payments/create", { jobId, method }).then(mapPayment),
+  paymentCallback: (id: string, success: boolean) => http.post<Any>(`/payments/${id}/simulate-callback`, { success }).then(mapPayment),
+  myPayments: () => http.get<Any[]>("/payments/my").then((ps) => ps.map(mapPayment)),
+  paymentByJob: (jobId: string) => http.get<Any | null>(`/payments/job/${jobId}`).then((p) => (p ? mapPayment(p) : null)),
+
   approveWorker: (id: string) => http.post(`/admin/workers/${id}/approve`, {}),
   rejectWorker: (id: string, reason: string) => http.post(`/admin/workers/${id}/reject`, { reason }),
   adminWorkers: () => http.get<Any[]>("/admin/workers"),
@@ -168,7 +182,7 @@ const dedupe = <T extends { id: string }>(xs: T[]) => {
  * để hydrate vào store — UI giữ nguyên, chỉ đổi nguồn dữ liệu.
  */
 export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
-  const out = { quotes: [] as Quote[], reviews: [] as Review[], users: [] as User[] };
+  const out = { quotes: [] as Quote[], reviews: [] as Review[], users: [] as User[], payments: [] as Payment[] };
   const [categories, notifications, me] = await Promise.all([remote.categories(), remote.notifications(), remote.me()]);
   out.users.push(me);
 
@@ -189,6 +203,8 @@ export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
     const chatJobs = jobs.filter((j) => j.workerId);
     const msgLists = await Promise.all(chatJobs.map((j) => remote.jobMessages(j.id).catch(() => [])));
     chats = msgLists.flat();
+    // thanh toán của khách (Giai đoạn 4)
+    out.payments = await remote.myPayments().catch(() => []);
   } else if (role === "worker") {
     const [profile, feed, mine] = await Promise.all([
       remote.myWorkerProfile().catch(() => null),
@@ -222,5 +238,6 @@ export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
     quotes: dedupe(out.quotes),
     reviews: dedupe(out.reviews),
     chats: dedupe(chats).sort((a, b) => a.createdAt - b.createdAt),
+    payments: dedupe(out.payments),
   };
 }

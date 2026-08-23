@@ -12,7 +12,7 @@ import {
   registerCustomer as remoteRegisterCustomer, registerWorker as remoteRegisterWorker,
 } from "./remote";
 import type {
-  BookInput, Category, CreateJobInput, DB, Job, Quote, Role, User, WorkerProfile, WorkerRegisterInput,
+  BookInput, Category, CreateJobInput, DB, Job, Payment, PaymentMethod, Quote, Role, User, WorkerProfile, WorkerRegisterInput,
 } from "./types";
 
 const delay = (ms = 380) => new Promise((r) => setTimeout(r, ms));
@@ -432,6 +432,48 @@ export async function resolveReview(reviewId: string, action: "keep" | "hide") {
   mutate((db) => {
     db.reviews = db.reviews.map((r) => (r.id === reviewId ? { ...r, flagged: false, hidden: action === "hide" } : r));
   });
+}
+
+/* ================= THANH TOÁN SANDBOX (Giai đoạn 4) ================= */
+
+/**
+ * Thanh toán cho một việc (mô phỏng VNPay).
+ *  - api : tạo giao dịch PENDING → giả lập callback thành công → đồng bộ store
+ *  - mock: tạo giao dịch local, báo thông báo cho khách & thợ
+ */
+export async function payForJob(jobId: string, method: PaymentMethod): Promise<Payment> {
+  if (isApiMode()) {
+    const created = await remote.createPayment(jobId, method);
+    // Sandbox: giả lập người dùng đã trả tiền ở cổng VNPay → bắn IPN callback
+    const done = await remote.paymentCallback(created.id, true);
+    await after();
+    return done;
+  }
+  await delay(1100);
+  const job = getDB().jobs.find((j) => j.id === jobId);
+  if (!job) throw new Error("Không tìm thấy công việc.");
+  const amount = getDB().quotes.find((q) => q.jobId === jobId && q.status === "accepted")?.price ?? job.budget;
+  const payment: Payment = {
+    id: uid("pay"), jobId, customerId: job.customerId, amount, method,
+    txnRef: `${job.code}-${Date.now().toString().slice(-7)}`, status: "success",
+    createdAt: Date.now(), paidAt: Date.now(),
+  };
+  mutate((db) => {
+    db.payments = [payment, ...db.payments.filter((p) => p.jobId !== jobId)];
+    pushNotif(db, job.customerId, `Thanh toán ${amount.toLocaleString("vi-VN")}₫ cho ${job.code} thành công (mã ${payment.txnRef})`, "wallet");
+    if (job.workerId) {
+      const w = db.workers.find((x) => x.id === job.workerId);
+      if (w) pushNotif(db, w.userId, `Khách đã thanh toán ${amount.toLocaleString("vi-VN")}₫ cho việc ${job.code}`, "wallet");
+    }
+  });
+  return payment;
+}
+
+/** Trạng thái thanh toán của một việc — dùng chung cả 2 chế độ */
+export async function paymentForJob(jobId: string): Promise<Payment | null> {
+  if (isApiMode()) return remote.paymentByJob(jobId).catch(() => null);
+  const list = getDB().payments.filter((p) => p.jobId === jobId);
+  return list.find((p) => p.status === "success") ?? list[0] ?? null;
 }
 
 /* ================= "AI" HELPERS (rule-based, sẵn sàng nâng cấp LLM) ================= */

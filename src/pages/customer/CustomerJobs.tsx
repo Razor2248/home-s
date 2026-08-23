@@ -1,12 +1,13 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { useDB, useSession } from "../../lib/store";
-import { acceptQuote, cancelJob, reviewJob } from "../../lib/api";
+import { acceptQuote, cancelJob, paymentForJob, reviewJob } from "../../lib/api";
 import { cls, fmtVND, timeAgo, URGENCY } from "../../lib/format";
 import { CATEGORY_ICON, FALLBACK_ICON, Icon, type IconName } from "../../components/Icons";
 import { Badge, Button, EmptyState, Field, JobPill, Modal, Stars, Tabs, useToast } from "../../components/ui";
 import { ChatPanel } from "../../components/Chat";
-import type { Job } from "../../lib/types";
+import { PaymentModal } from "../../components/PaymentModal";
+import type { Job, Payment } from "../../lib/types";
 
 /* ================= DANH SÁCH VIỆC ================= */
 export function MyJobs() {
@@ -97,6 +98,24 @@ export function CustomerJobDetail() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [busy, setBusy] = useState(false);
+  const [payOpen, setPayOpen] = useState(false);
+  const [payment, setPayment] = useState<Payment | null>(null);
+
+  // nạp trạng thái thanh toán của việc (Giai đoạn 4)
+  useEffect(() => {
+    let alive = true;
+    if (!job) {
+      setPayment(null);
+      return;
+    }
+    paymentForJob(job.id)
+      .then((p) => alive && setPayment(p))
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [job?.id, db.payments.length]);
 
   if (!job) {
     return (
@@ -112,6 +131,10 @@ export function CustomerJobDetail() {
   const workerUser = worker ? db.users.find((u) => u.id === worker.userId) : undefined;
   const myReview = db.reviews.find((r) => r.jobId === job.code && r.customerId === me.id);
   const cancellable = ["open", "assigned"].includes(job.status);
+  const accepted = quotes.find((q) => q.status === "accepted");
+  const amount = accepted?.price ?? job.budget;
+  const payable = worker && ["assigned", "in_progress", "done"].includes(job.status) && payment?.status !== "success";
+  const paid = payment?.status === "success";
 
   const doAccept = async (quoteId: string) => {
     setBusyQuote(quoteId);
@@ -246,6 +269,34 @@ export function CustomerJobDetail() {
             )}
           </div>
 
+          {/* thanh toán (Giai đoạn 4) */}
+          {worker && !["open", "cancelled"].includes(job.status) && (
+            <div className={cls("rounded-xl border p-5", paid ? "border-good-500/50 bg-good-100/40" : "border-line bg-card")}>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <span className={cls("flex h-11 w-11 items-center justify-center rounded-xl", paid ? "bg-good-500 text-white" : "bg-safety-500/15 text-safety-600")}>
+                    <Icon name={paid ? "check" : "wallet"} size={20} />
+                  </span>
+                  <div>
+                    <p className="text-[14.5px] font-bold text-ink-900">
+                      {paid ? "Đã thanh toán" : payment?.status === "pending" ? "Chờ xác nhận thanh toán" : "Thanh toán dịch vụ"}
+                    </p>
+                    <p className="text-[12.5px] text-mute">
+                      {paid
+                        ? `Mã ${payment?.txnRef} · ${payment?.paidAt ? timeAgo(payment.paidAt) : ""}`
+                        : `Giá chốt với ${worker.name}: ${fmtVND(amount)}`}
+                    </p>
+                  </div>
+                </div>
+                {payable ? (
+                  <Button icon="lock" onClick={() => setPayOpen(true)}>Thanh toán ngay</Button>
+                ) : paid ? (
+                  <Badge className="bg-good-500 text-white"><Icon name="shield" size={12} /> Giao dịch an toàn</Badge>
+                ) : null}
+              </div>
+            </div>
+          )}
+
           {/* đánh giá sau hoàn thành */}
           {job.status === "done" && (
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-dashed border-good-500/60 bg-good-100/40 p-5">
@@ -344,6 +395,17 @@ export function CustomerJobDetail() {
           <Button variant="good" icon="star" loading={busy} onClick={doReview}>Gửi đánh giá</Button>
         </div>
       </Modal>
+
+      {/* modal thanh toán (Giai đoạn 4) */}
+      {payOpen && (
+        <PaymentModal
+          job={job}
+          amount={amount}
+          workerName={worker?.name}
+          onClose={() => setPayOpen(false)}
+          onPaid={(p) => setPayment(p)}
+        />
+      )}
     </div>
   );
 }

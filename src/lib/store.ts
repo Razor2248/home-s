@@ -17,7 +17,11 @@ const subscribe = (l: () => void) => {
 function load(): DB {
   try {
     const raw = localStorage.getItem(KEY);
-    if (raw) return JSON.parse(raw) as DB;
+    if (raw) {
+      const parsed = JSON.parse(raw) as DB;
+      // tương thích dữ liệu lưu từ phiên bản cũ (chưa có payments)
+      return { ...parsed, payments: parsed.payments ?? [] };
+    }
   } catch {
     /* ignore */
   }
@@ -98,6 +102,7 @@ export function hydrateDB(partial: Partial<DB>) {
     if (partial.reviews) d.reviews = partial.reviews;
     if (partial.chats) d.chats = partial.chats;
     if (partial.notifications) d.notifications = partial.notifications;
+    if (partial.payments) d.payments = partial.payments;
   });
 }
 

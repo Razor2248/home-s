@@ -1,15 +1,44 @@
 import { useEffect, useRef, useState } from "react";
-import { useDB } from "../lib/store";
+import { getDB, mutate, useDB } from "../lib/store";
 import { sendChat } from "../lib/api";
-import { cls, hourShort } from "../lib/format";
+import { cls, hourShort, uid } from "../lib/format";
+import { isApiMode } from "../lib/config";
+import { emitChat, onChatMessage, socketConnected } from "../lib/socket";
+import { mapMessage } from "../lib/remote";
 import { Icon } from "./Icons";
-import type { Job } from "../lib/types";
+import type { ChatMessage, Job } from "../lib/types";
 
 export function ChatPanel({ job, currentUserId, height = 380 }: { job: Job; currentUserId: string; height?: number }) {
   const db = useDB();
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
+  const [live, setLive] = useState(false);
   const boxRef = useRef<HTMLDivElement>(null);
+  const apiMode = isApiMode();
+
+  // Chế độ API: lắng nghe tin nhắn thời gian thực qua Socket.io
+  useEffect(() => {
+    if (!apiMode) return;
+    const push = (raw: unknown) => {
+      const m = mapMessage(raw as never);
+      mutate((d) => {
+        const dup = d.chats.some((c) => c.id === m.id);
+        // khử trùng bản echo của chính tin vừa gửi lạc quan (cùng người gửi + nội dung, trong 6s)
+        const softDup = d.chats.some(
+          (c) => c.senderId === m.senderId && c.text === m.text && Math.abs(c.createdAt - m.createdAt) < 6000,
+        );
+        if (dup || softDup) return;
+        d.chats = [...d.chats, m];
+      });
+    };
+    const off = onChatMessage(job.id, push);
+    const t = setInterval(() => setLive(socketConnected(job.id)), 1200);
+    setLive(socketConnected(job.id));
+    return () => {
+      off();
+      clearInterval(t);
+    };
+  }, [apiMode, job.id]);
 
   const msgs = db.chats.filter((m) => m.jobId === job.id).sort((a, b) => a.createdAt - b.createdAt);
 
@@ -30,9 +59,29 @@ export function ChatPanel({ job, currentUserId, height = 380 }: { job: Job; curr
   const send = async () => {
     const t = text.trim();
     if (!t || sending) return;
+    setText("");
+
+    if (apiMode) {
+      if (socketConnected(job.id)) {
+        // gửi qua socket: hiển thị lạc quan, server echo sẽ bị khử trùng
+        mutate((d) => {
+          d.chats = [...d.chats, { id: uid("tmp"), jobId: job.id, senderId: senderAs, text: t, createdAt: Date.now() }];
+        });
+        emitChat(job.id, t);
+      } else {
+        // socket chưa nối kịp: gửi REST rồi tự thêm vào store
+        setSending(true);
+        await sendChat(job.id, senderAs, t);
+        mutate((d) => {
+          d.chats = [...d.chats, { id: uid("m"), jobId: job.id, senderId: senderAs, text: t, createdAt: Date.now() }];
+        });
+        setSending(false);
+      }
+      return;
+    }
+
     setSending(true);
     await sendChat(job.id, senderAs, t);
-    setText("");
     setSending(false);
   };
 
@@ -44,9 +93,22 @@ export function ChatPanel({ job, currentUserId, height = 380 }: { job: Job; curr
           <p className="text-[13.5px] font-bold text-ink-900">Trao đổi với {name}</p>
           <p className="text-[11px] text-mute">Phiếu việc {job.code} · tin nhắn được lưu trên nền tảng</p>
         </div>
-        <span className="flex items-center gap-1.5 rounded-full bg-good-100 px-2 py-0.5 text-[10.5px] font-bold text-good-700">
-          <span className="live-dot h-1.5 w-1.5 rounded-full bg-good-500" /> trực tuyến
-        </span>
+        {apiMode ? (
+          <span
+            className={cls(
+              "flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10.5px] font-bold",
+              live ? "bg-good-100 text-good-700" : "bg-warn-100 text-warn-600",
+            )}
+            title={live ? "Đang kết nối Socket.io — tin nhắn cập nhật tức thì" : "Chưa nối được Socket.io — đang dùng REST"}
+          >
+            <span className={cls("h-1.5 w-1.5 rounded-full", live ? "live-dot bg-good-500" : "bg-warn-600")} />
+            {live ? "realtime" : "REST"}
+          </span>
+        ) : (
+          <span className="flex items-center gap-1.5 rounded-full bg-good-100 px-2 py-0.5 text-[10.5px] font-bold text-good-700">
+            <span className="live-dot h-1.5 w-1.5 rounded-full bg-good-500" /> trực tuyến
+          </span>
+        )}
       </div>
 
       <div ref={boxRef} className="space-y-2.5 overflow-y-auto bg-[#fafaf6] px-4 py-4" style={{ height }}>

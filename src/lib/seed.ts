@@ -7,6 +7,7 @@ const d = (n: number) => now - n * 86400_000;
 export function seedDB(): DB {
   return {
     seq: 1009,
+    payments: [],
     categories: [
       { id: "dien", name: "Sửa điện dân dụng", icon: "bolt", color: "#f4581c", priceMin: 150000, priceMax: 500000, unit: "lần" },
       { id: "nuoc", name: "Sửa ống nước", icon: "droplet", color: "#2f6fd0", priceMin: 150000, priceMax: 450000, unit: "lần" },
