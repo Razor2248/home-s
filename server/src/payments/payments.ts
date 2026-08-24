@@ -83,6 +83,19 @@ export class PaymentsController {
     });
   }
 
+  /** Thợ xem thanh toán của các việc mình được gán */
+  @Roles(Role.WORKER)
+  @Get("worker")
+  async forWorker(@CurrentUser() u: AuthUser) {
+    const w = await this.prisma.workerProfile.findUnique({ where: { userId: u.sub } });
+    if (!w) return [];
+    return this.prisma.payment.findMany({
+      where: { job: { workerId: w.id } },
+      orderBy: { createdAt: "desc" },
+      include: { job: { select: { id: true, code: true, title: true, district: true } } },
+    });
+  }
+
   /** Trạng thái thanh toán của 1 việc (người liên quan) */
   @Get("job/:jobId")
   async byJob(@CurrentUser() u: AuthUser, @Param("jobId") jobId: string) {

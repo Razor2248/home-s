@@ -1,8 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Route, Routes, useNavigate } from "react-router-dom";
 import { DashShell, type NavItem } from "../../components/DashShell";
 import { useDB, useSession } from "../../lib/store";
 import { addCategory, approveWorker, blockUser, deleteCategory, rejectWorker, resolveReview, updateCategory } from "../../lib/api";
+import { remote } from "../../lib/remote";
+import { isApiMode } from "../../lib/config";
 import { APPROVAL, cls, fmtK, fmtVND, timeAgo } from "../../lib/format";
 import { CATEGORY_ICON, FALLBACK_ICON, Icon, type IconName } from "../../components/Icons";
 import { Badge, Bars, Button, EmptyState, Field, JobPill, Modal, Stars, Tabs, useToast } from "../../components/ui";
@@ -67,6 +69,13 @@ function Dashboard() {
     { i: "wallet" as IconName, l: "Phí nền tảng (10%)", v: fmtK(revenue * 0.1), s: `từ ${fmtK(revenue)} giá trị hoàn thành`, cls: "bg-good-100 text-good-700" },
   ];
 
+  // Thống kê thanh toán qua cổng (Giai đoạn 4) — chỉ có ở chế độ API
+  const [pay, setPay] = useState<{ count: number; gross: number; platformFee: number; workerPayout: number } | null>(null);
+  useEffect(() => {
+    if (!isApiMode()) return;
+    remote.adminPaymentStats().then(setPay).catch(() => {});
+  }, []);
+
   return (
     <div className="anim-fadeUp space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -89,6 +98,23 @@ function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Doanh thu qua cổng thanh toán (Giai đoạn 4) */}
+      {pay && (
+        <div className="anim-fadeUp grid gap-3.5 rounded-xl border border-good-500/30 bg-good-100/40 p-4 sm:grid-cols-4">
+          {[
+            { l: "Giao dịch thành công", v: String(pay.count) },
+            { l: "Tổng giá trị", v: fmtVND(pay.gross) },
+            { l: "Phí nền tảng (10%)", v: fmtVND(pay.platformFee) },
+            { l: "Chi trả cho thợ", v: fmtVND(pay.workerPayout) },
+          ].map((x) => (
+            <div key={x.l}>
+              <p className="font-display text-[19px] font-extrabold text-good-700">{x.v}</p>
+              <p className="text-[11.5px] font-semibold text-good-700/80">{x.l}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
         <div className="rounded-xl border border-line bg-card p-5">

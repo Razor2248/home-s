@@ -365,6 +365,9 @@ function WorkerJobDetail() {
   const customer = db.users.find((u) => u.id === job.customerId);
   const price = db.quotes.find((q) => q.jobId === job.id && q.status === "accepted")?.price ?? job.budget;
   const review = db.reviews.find((r) => r.jobId === job.code);
+  // Trạng thái thanh toán của việc (Giai đoạn 4)
+  const payment = db.payments.find((p) => p.jobId === job.id);
+  const paid = payment?.status === "success";
 
   const act = async (fn: () => Promise<void>, msg: string) => {
     setBusy(true);
@@ -383,6 +386,12 @@ function WorkerJobDetail() {
           <span className="rounded-md bg-ink-900 px-2.5 py-1 font-mono text-[12px] font-bold text-paper">{job.code}</span>
           <JobPill status={job.status} />
           {job.urgency === "urgent" && <Badge className="bg-safety-500 text-white">Khẩn cấp</Badge>}
+          {paid && (
+            <Badge className="bg-good-100 text-good-700">
+              <Icon name="check" size={12} /> Khách đã thanh toán {fmtVND(payment!.amount)}
+            </Badge>
+          )}
+          {payment && payment.status === "pending" && <Badge className="bg-warn-100 text-warn-600">Đang chờ khách thanh toán</Badge>}
         </div>
         <h2 className="mt-3 font-display text-[22px] font-extrabold text-ink-900">{job.title}</h2>
         <p className="mt-2 whitespace-pre-line text-[14px] leading-relaxed text-ink-700">{job.description}</p>
@@ -454,6 +463,8 @@ function Stats() {
   const reviews = db.reviews.filter((r) => r.workerId === w.id);
   const dist = [5, 4, 3, 2, 1].map((s) => ({ s, n: reviews.filter((r) => Math.round(r.rating) === s).length }));
   const maxDist = Math.max(1, ...dist.map((x) => x.n));
+  // Tổng tiền khách đã thanh toán online cho các việc của thợ (Giai đoạn 4)
+  const collected = db.payments.filter((p) => p.status === "success").reduce((s, p) => s + p.amount, 0);
 
   return (
     <div className="anim-fadeUp space-y-5">
@@ -472,6 +483,11 @@ function Stats() {
             <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-safety-100 text-safety-600"><Icon name={s.i} size={17} /></span>
             <p className="font-display text-[21px] font-extrabold text-ink-900">{s.v}</p>
             <p className="text-[12px] font-semibold text-mute">{s.l}</p>
+            {s.l === "Tổng doanh thu" && collected > 0 && (
+              <p className="mt-1.5 flex items-center gap-1 rounded-md bg-good-100 px-2 py-1 text-[11px] font-bold text-good-700">
+                <Icon name="check" size={11} /> Đã thu online {fmtK(collected)}
+              </p>
+            )}
           </div>
         ))}
       </div>

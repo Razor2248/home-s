@@ -197,6 +197,17 @@ const API_GROUPS: ApiGroup[] = [
     ],
   },
   {
+    name: "Thanh toán (GĐ4)", icon: "wallet",
+    items: [
+      { m: "POST", p: "/payments/create", role: "Khách", d: "Tạo giao dịch PENDING + txnRef (bước 'chuyển hướng cổng VNPay')" },
+      { m: "POST", p: "/payments/:id/simulate-callback", role: "Khách", d: "Sandbox IPN: báo thành công/thất bại, cập nhật + thông báo 2 bên" },
+      { m: "GET", p: "/payments/my", role: "Khách", d: "Lịch sử giao dịch của khách" },
+      { m: "GET", p: "/payments/worker", role: "Thợ", d: "Giao dịch của các việc thợ được gán" },
+      { m: "GET", p: "/payments/job/:jobId", role: "Người liên quan", d: "Trạng thái thanh toán của 1 việc" },
+      { m: "GET", p: "/admin/payments/stats", role: "Admin", d: "Tổng giá trị, phí 10%, chi trả thợ" },
+    ],
+  },
+  {
     name: "Quản trị", icon: "shield",
     items: [
       { m: "GET", p: "/admin/stats", role: "Admin", d: "KPI + doanh thu + chuỗi việc 14 ngày" },
@@ -227,6 +238,10 @@ const FLOWS = [
   {
     name: "Chat thời gian thực", icon: "chat" as IconName, tone: "#dd9a2b",
     steps: ["Client nối Socket.io /chat kèm JWT", "Xác thực + join room job:{id}", "message:send → lưu DB → message:new", "Hai bên nhận tin tức thì"],
+  },
+  {
+    name: "Thanh toán sandbox (VNPay)", icon: "wallet" as IconName, tone: "#12936f",
+    steps: ["Khách: POST /payments/create → giao dịch PENDING + txnRef", "Giả lập cổng: POST /payments/:id/simulate-callback", "Cập nhật SUCCESS + thông báo khách & thợ", "Thợ thấy 'Khách đã thanh toán', Admin thấy doanh thu"],
   },
 ];
 
@@ -451,7 +466,7 @@ export default function Docs() {
         {tab === "flow" && (
           <div className="anim-fadeUp">
             <h1 className="font-display text-[clamp(1.6rem,3vw,2.2rem)] font-extrabold text-white">Luồng nghiệp vụ chính</h1>
-            <p className="mt-1 mb-8 text-[14px] text-ink-400">4 luồng xuyên suốt nền tảng — trùng khớp với kịch bản test end-to-end ở Giai đoạn 6.</p>
+            <p className="mt-1 mb-8 text-[14px] text-ink-400">5 luồng xuyên suốt nền tảng — trùng khớp với kịch bản test end-to-end ở Giai đoạn 6.</p>
             <div className="grid gap-5 md:grid-cols-2">
               {FLOWS.map((f, fi) => (
                 <div key={f.name} className="anim-fadeUp rounded-xl border border-white/10 bg-ink-900/70 p-6 transition hover:border-white/25" style={{ animationDelay: `${fi * 70}ms` }}>
@@ -511,7 +526,7 @@ export default function Docs() {
                 <ul className="mt-4 space-y-2 text-[13px] leading-relaxed text-ink-400">
                   <li>• Chọn “Server API” ở màn hình đăng nhập, nhập địa chỉ (mặc định <code className="font-mono text-safety-400">localhost:3001/api/v1</code>), bấm Kiểm tra.</li>
                   <li>• Đăng nhập nhận JWT, mỗi thao tác gọi REST endpoint tương ứng rồi <b className="text-paper">hydrate</b> lại store.</li>
-                  <li>• Tự đồng bộ mỗi 25 giây + khi quay lại tab (polling — bản cuối thay bằng Socket.io).</li>
+                  <li>• Tự đồng bộ mỗi 25 giây + khi quay lại tab. Riêng <b className="text-paper">chat dùng Socket.io thời gian thực</b> (Giai đoạn 4).</li>
                   <li>• Pill trạng thái trên topbar: xanh = kết nối tốt, đỏ = lỗi (kèm thông điệp).</li>
                 </ul>
               </div>
@@ -555,7 +570,9 @@ export default function Docs() {
                 ["Bắt đầu / hoàn thành", "startJob() · completeJob()", "POST /jobs/:id/start · /complete"],
                 ["Đánh giá", "reviewJob()", "POST /jobs/:id/review"],
                 ["Đặt lịch trực tiếp", "bookDirect()", "POST /jobs/book"],
-                ["Chat", "sendChat()", "POST /jobs/:id/messages"],
+                ["Chat (REST fallback)", "sendChat()", "POST /jobs/:id/messages"],
+                ["Chat realtime (GĐ4)", "socket.io /chat", "message:send → message:new (phòng job:{id})"],
+                ["Thanh toán (GĐ4)", "payForJob()", "POST /payments/create → /:id/simulate-callback"],
                 ["Duyệt / từ chối thợ", "approveWorker() · rejectWorker()", "POST /admin/workers/:id/approve · /reject"],
                 ["Khóa người dùng", "blockUser()", "PATCH /admin/users/:id/block"],
                 ["CRUD danh mục", "addCategory() …", "POST · PUT · DELETE /admin/categories"],
@@ -566,6 +583,38 @@ export default function Docs() {
                   <code className="truncate font-mono text-[12px] text-ink-400">{ep}</code>
                 </div>
               ))}
+            </div>
+
+            {/* Giai đoạn 4 */}
+            <h2 className="mt-10 mb-4 flex items-center gap-2 font-display text-[19px] font-bold text-white">
+              <span className="h-[3px] w-6 rounded-full bg-good-500" /> Giai đoạn 4 — Chat realtime & Thanh toán sandbox
+            </h2>
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-ink-900/70 p-6 transition hover:border-white/25">
+                <p className="flex items-center gap-2.5 font-display text-[16.5px] font-bold text-white">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-warn-100/20 text-warn-600"><Icon name="chat" size={17} /></span>
+                  Chat Socket.io
+                </p>
+                <ul className="mt-4 space-y-2 text-[13px] leading-relaxed text-ink-400">
+                  <li>• Client nối namespace <code className="font-mono text-safety-400">/chat</code> kèm JWT + jobId trong handshake.</li>
+                  <li>• Gateway xác thực, kiểm tra quyền tham gia rồi join room <code className="font-mono text-[12.5px]">job:{`{id}`}</code>.</li>
+                  <li>• <code className="font-mono text-[12.5px]">message:send</code> → lưu DB → broadcast <code className="font-mono text-[12.5px]">message:new</code> cho cả phòng.</li>
+                  <li>• UI khử trùng tin echo, hiện chấm “trực tuyến” khi socket nối thành công.</li>
+                  <li>• Mất socket vẫn gửi được qua REST fallback — không gián đoạn.</li>
+                </ul>
+              </div>
+              <div className="rounded-xl border border-good-500/40 bg-good-500/[0.06] p-6 transition hover:border-good-500">
+                <p className="flex items-center gap-2.5 font-display text-[16.5px] font-bold text-white">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-good-500/20 text-good-500"><Icon name="wallet" size={17} /></span>
+                  Thanh toán sandbox (VNPay)
+                </p>
+                <ul className="mt-4 space-y-2 text-[13px] leading-relaxed text-ink-400">
+                  <li>• Mô phỏng đúng luồng thật: <b className="text-paper">create → cổng thanh toán → IPN callback → verify</b>.</li>
+                  <li>• <code className="font-mono text-[12.5px]">/payments/create</code> sinh giao dịch PENDING + mã <code className="font-mono text-[12.5px]">txnRef</code>.</li>
+                  <li>• <code className="font-mono text-[12.5px]">simulate-callback</code> thay cho IPN thật của VNPay khi chạy sandbox.</li>
+                  <li>• Thành công: thông báo khách & thợ, thợ thấy badge “Đã thanh toán”, Admin thấy doanh thu + phí 10%.</li>
+                </ul>
+              </div>
             </div>
 
             {/* chạy 2 terminal */}

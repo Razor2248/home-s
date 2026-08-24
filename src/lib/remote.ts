@@ -156,6 +156,7 @@ export const remote = {
   createPayment: (jobId: string, method: string) => http.post<Any>("/payments/create", { jobId, method }).then(mapPayment),
   paymentCallback: (id: string, success: boolean) => http.post<Any>(`/payments/${id}/simulate-callback`, { success }).then(mapPayment),
   myPayments: () => http.get<Any[]>("/payments/my").then((ps) => ps.map(mapPayment)),
+  workerPayments: () => http.get<Any[]>("/payments/worker").then((ps) => ps.map(mapPayment)),
   paymentByJob: (jobId: string) => http.get<Any | null>(`/payments/job/${jobId}`).then((p) => (p ? mapPayment(p) : null)),
 
   approveWorker: (id: string) => http.post(`/admin/workers/${id}/approve`, {}),
@@ -168,6 +169,7 @@ export const remote = {
   deleteCategory: (id: string) => http.delete(`/admin/categories/${id}`),
   adminReviews: () => http.get<Any[]>("/admin/reviews"),
   resolveReview: (id: string, action: "keep" | "hide") => http.post(`/admin/reviews/${id}/resolve`, { action }),
+  adminPaymentStats: () => http.get<{ count: number; gross: number; platformFee: number; workerPayout: number }>("/admin/payments/stats"),
 };
 
 /* ================= snapshot theo vai trò ================= */
@@ -218,6 +220,8 @@ export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
     const chatJobs = mine.filter((j: Any) => j.status !== "OPEN" && j.status !== "CANCELLED");
     const msgLists = await Promise.all(chatJobs.map((j: Any) => remote.jobMessages(j.id).catch(() => [])));
     chats = msgLists.flat();
+    // thanh toán cho các việc thợ được gán (Giai đoạn 4)
+    out.payments = await remote.workerPayments().catch(() => []);
   } else {
     const [rawJobs, rawWorkers, rawUsers, rawReviews] = await Promise.all([
       remote.adminJobs(), remote.adminWorkers(), remote.adminUsers(), remote.adminReviews(),
