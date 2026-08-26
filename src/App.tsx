@@ -8,6 +8,8 @@ import type { Role } from "./lib/types";
 import Landing from "./pages/Landing";
 import Login from "./pages/Login";
 import Docs from "./pages/Docs";
+import TestPage from "./pages/TestPage";
+import Report from "./pages/Report";
 import CustomerApp from "./pages/customer/CustomerApp";
 import WorkerApp from "./pages/worker/WorkerApp";
 import AdminApp from "./pages/admin/AdminApp";
@@ -65,6 +67,8 @@ export default function App() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/docs" element={<Docs />} />
+          <Route path="/test" element={<TestPage />} />
+          <Route path="/report" element={<Report />} />
           <Route
             path="/app/customer/*"
             element={

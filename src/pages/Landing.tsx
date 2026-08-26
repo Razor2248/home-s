@@ -421,8 +421,13 @@ export default function Landing() {
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
             © 2026 Home Services — Đồ án tốt nghiệp · Demo giai đoạn 1, dữ liệu mô phỏng.
             <Link to="/docs" className="inline-flex items-center gap-1.5 rounded-lg bg-safety-500/15 px-3 py-1.5 font-mono text-[11.5px] font-bold text-safety-400 transition hover:bg-safety-500 hover:text-white">
-              <Icon name="code" size={13} /> Tài liệu GĐ2: CSDL + API
-              <Icon name="arrowR" size={13} />
+              <Icon name="code" size={13} /> Tài liệu: CSDL + API
+            </Link>
+            <Link to="/test" className="inline-flex items-center gap-1.5 rounded-lg bg-good-500/15 px-3 py-1.5 font-mono text-[11.5px] font-bold text-good-700 transition hover:bg-good-500 hover:text-white">
+              <Icon name="check" size={13} /> Trung tâm QA
+            </Link>
+            <Link to="/report" className="inline-flex items-center gap-1.5 rounded-lg bg-ink-800/10 px-3 py-1.5 font-mono text-[11.5px] font-bold text-ink-700 transition hover:bg-ink-900 hover:text-white">
+              <Icon name="clipboard" size={13} /> Báo cáo
             </Link>
           </span>
         </div>
