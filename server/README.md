@@ -65,7 +65,18 @@ server/
     └── admin/            # stats, duyệt thợ, khóa user, CRUD danh mục, xử lý báo cáo
 ```
 
-## 6. Bảo mật
+## 6. Lỗi thường gặp
+
+| Triệu chứng | Nguyên nhân & cách xử lý |
+|---|---|
+| `Cannot find name 'process'` khi chạy seed | Chạy lại `npm install` rồi `npm run seed` — cần `@types/node` + `tsconfig.json` (đã có sẵn). |
+| `Could not find TypeScript configuration file "tsconfig.json"` | Thiếu `tsconfig.json` ở thư mục `server/` — file này đã được bổ sung, pull code mới hoặc copy 3 file: `tsconfig.json`, `tsconfig.build.json`, `nest-cli.json`. |
+| `Cannot find module '@prisma/client'` hoặc thiếu enum | Prisma client chưa generate — chạy `npx prisma generate` (hoặc `npx prisma migrate dev` sẽ tự generate). |
+| `P1001: Can't reach database server` | PostgreSQL chưa chạy — kiểm tra Docker: `docker ps`, hoặc `docker start hs-postgres`. |
+| `P2021: The table does not exist` | Chưa migrate — chạy `npx prisma migrate dev` trước khi seed. |
+| Cổng 3001 đã được dùng | Đổi `PORT` trong `.env`, nhớ cập nhật địa chỉ API ở màn hình đăng nhập frontend. |
+
+## 7. Bảo mật
 
 - Mật khẩu băm bcrypt (12 rounds), không lưu plaintext.
 - Access token JWT 15 phút + Refresh token lưu DB (có thu hồi).
