@@ -54,7 +54,7 @@ Trong thư mục gốc của frontend, tạo `.env`:
 VITE_API_URL=http://localhost:3001/api/v1
 ```
 
-Sau đó thay ruột các hàm trong `src/lib/api.ts` bằng `src/lib/http.ts` (đã chuẩn bị sẵn) — giao diện giữ nguyên.
+Việc kết nối đã hoàn tất ở Giai đoạn 3: `src/lib/api.ts` tự định tuyến — chế độ **Server API** (chọn ở màn hình đăng nhập) sẽ gọi `remote.ts` → `http.ts` → backend, chế độ **Demo** dùng localStorage. Giao diện giữ nguyên 100%, không cần sửa gì thêm.
 
 ## 5. Cấu trúc
 
@@ -88,6 +88,7 @@ server/
 | `Cannot find module '@prisma/client'` hoặc thiếu enum | Prisma client chưa generate — chạy `npx prisma generate` (hoặc `npx prisma migrate dev` sẽ tự generate). |
 | `P1001: Can't reach database server` | PostgreSQL chưa chạy — kiểm tra Docker: `docker ps`, hoặc `docker start hs-postgres`. |
 | `P2021: The table does not exist` | Chưa migrate — chạy `npx prisma migrate dev` trước khi seed. |
+| Frontend báo "Không kết nối được máy chủ" dù backend đang chạy | **CORS**: frontend chạy port 3000 (hoặc 127.0.0.1) mà `CORS_ORIGIN` trong `.env` chỉ liệt kê 5173. Sửa thành danh sách: `CORS_ORIGIN="http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"` rồi **khởi động lại backend** (file `.env` chỉ đọc khi khởi động). |
 | Cổng 3001 đã được dùng | Đổi `PORT` trong `.env`, nhớ cập nhật địa chỉ API ở màn hình đăng nhập frontend. |
 
 ## 7. Bảo mật
