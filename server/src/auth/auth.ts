@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Module, Post, UnauthorizedException } from "@nestjs/common";
+import { Body, Controller, Get, Injectable, Module, Post, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { IsEmail, IsInt, IsNotEmpty, IsOptional, IsString, Min, MinLength } from "class-validator";
 import * as bcrypt from "bcryptjs";
@@ -31,6 +31,7 @@ class RefreshDto {
 }
 
 /* ---------------- SERVICE ---------------- */
+@Injectable()
 export class AuthService {
   constructor(
     private prisma: PrismaService,

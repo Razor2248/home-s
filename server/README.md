@@ -89,6 +89,7 @@ server/
 | `P1001: Can't reach database server` | PostgreSQL chưa chạy — kiểm tra Docker: `docker ps`, hoặc `docker start hs-postgres`. |
 | `P2021: The table does not exist` | Chưa migrate — chạy `npx prisma migrate dev` trước khi seed. |
 | Frontend báo "Không kết nối được máy chủ" dù backend đang chạy | **CORS**: frontend chạy port 3000 (hoặc 127.0.0.1) mà `CORS_ORIGIN` trong `.env` chỉ liệt kê 5173. Sửa thành danh sách: `CORS_ORIGIN="http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173,http://127.0.0.1:3000"` rồi **khởi động lại backend** (file `.env` chỉ đọc khi khởi động). |
+| Đăng nhập báo `Cannot read properties of undefined (reading 'user')` | Class service thiếu decorator `@Injectable()` → Nest không inject được PrismaService (đã sửa trong `auth.ts`). Bài học: mọi class khai báo trong `providers` đều cần `@Injectable()`. |
 | Cổng 3001 đã được dùng | Đổi `PORT` trong `.env`, nhớ cập nhật địa chỉ API ở màn hình đăng nhập frontend. |
 
 ## 7. Bảo mật
