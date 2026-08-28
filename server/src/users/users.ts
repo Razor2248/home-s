@@ -21,7 +21,7 @@ export class UsersController {
       include: { worker: { include: { category: true } }, favorites: { include: { worker: true } } },
     });
     if (!user) throw new BizError("Không tìm thấy người dùng.", 404);
-    const { passwordHash, refreshTokens, ...safe } = user;
+    const { passwordHash, ...safe } = user;
     return safe;
   }
 

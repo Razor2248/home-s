@@ -35,7 +35,7 @@ export class AdminController {
       this.prisma.workerProfile.count({ where: { approval: Approval.PENDING } }),
       this.prisma.review.count({ where: { flagged: true } }),
     ]);
-    const done = jobs.filter((j) => [JobStatus.DONE, JobStatus.REVIEWED].includes(j.status));
+    const done = jobs.filter((j) => ([JobStatus.DONE, JobStatus.REVIEWED] as JobStatus[]).includes(j.status));
     const revenue = done.reduce((s, j) => s + j.budget, 0);
 
     const days = Array.from({ length: 14 }, (_, i) => {
@@ -61,7 +61,7 @@ export class AdminController {
       include: {
         category: true,
         customer: { select: { id: true, name: true, avatarColor: true } },
-        worker: { select: { id: true, name: true } },
+        worker: { select: { id: true, user: { select: { name: true } } } },
         quotes: true,
       },
     });
@@ -140,7 +140,7 @@ export class AdminController {
     return this.prisma.review.findMany({
       where: flagged === "true" ? { flagged: true } : flagged === "hidden" ? { hidden: true } : {},
       orderBy: { createdAt: "desc" },
-      include: { customer: { select: { name: true } }, worker: { select: { name: true } } },
+      include: { customer: { select: { name: true } }, worker: { select: { user: { select: { name: true } } } } },
     });
   }
 

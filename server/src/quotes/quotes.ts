@@ -17,7 +17,7 @@ export class QuotesController {
   /** Thợ gửi báo giá cho một việc */
   @Roles(Role.WORKER) @Post("jobs/:id/quotes")
   async send(@CurrentUser() u: AuthUser, @Param("id") jobId: string, @Body() d: SendQuoteDto) {
-    const w = await this.prisma.workerProfile.findUnique({ where: { userId: u.sub } });
+    const w = await this.prisma.workerProfile.findUnique({ where: { userId: u.sub }, include: { user: { select: { name: true } } } });
     if (!w) throw new BizError("Chưa có hồ sơ thợ.", 404);
     if (w.approval !== Approval.APPROVED) throw new BizError("Hồ sơ của bạn chưa được duyệt.", 403);
 
@@ -34,7 +34,7 @@ export class QuotesController {
     await this.prisma.notification.create({
       data: {
         userId: job.customerId,
-        text: `${w.name} vừa gửi báo giá ${d.price.toLocaleString("vi-VN")}₫ cho ${job.code}`,
+        text: `${w.user.name} vừa gửi báo giá ${d.price.toLocaleString("vi-VN")}₫ cho ${job.code}`,
         icon: "wallet",
       },
     });
@@ -51,7 +51,7 @@ export class QuotesController {
       where: { jobId },
       orderBy: { price: "asc" },
       include: {
-        worker: { select: { id: true, name: true, rating: true, ratingCount: true, jobsDone: true, responseMins: true, verified: true } },
+        worker: { select: { id: true, rating: true, ratingCount: true, jobsDone: true, responseMins: true, verified: true, user: { select: { name: true } } } },
       },
     });
   }

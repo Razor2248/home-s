@@ -40,7 +40,7 @@ export class WorkersController {
         approval: Approval.APPROVED,
         ...(q.category ? { categoryId: q.category } : {}),
         ...(q.district ? { district: q.district } : {}),
-        ...(q.q ? { name: { contains: q.q, mode: "insensitive" } } : {}),
+        ...(q.q ? { user: { name: { contains: q.q, mode: "insensitive" } } } : {}),
       },
       include: { category: true, user: { select: { name: true } } },
       orderBy:
@@ -62,6 +62,7 @@ export class WorkersController {
       where: { id },
       include: {
         category: true,
+        user: { select: { name: true } },
         priceList: { orderBy: { order: "asc" } },
         reviews: { where: { hidden: false }, orderBy: { createdAt: "desc" }, take: 10, include: { customer: { select: { name: true, avatarColor: true } } } },
       },

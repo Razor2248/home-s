@@ -100,7 +100,7 @@ export class JobsController {
       orderBy: { createdAt: "desc" },
       include: {
         category: true,
-        customer: { select: { name: true, phone: true, avatarColor: true } },
+        customer: { select: { id: true, name: true, phone: true, avatarColor: true } },
         quotes: { where: { workerId: w.id } },
         review: { include: { customer: { select: { name: true } } } },
       },
@@ -116,7 +116,7 @@ export class JobsController {
         category: true,
         customer: { select: { id: true, name: true, phone: true, avatarColor: true } },
         worker: { include: { user: { select: { id: true, name: true, phone: true } } } },
-        quotes: { include: { worker: { select: { id: true, name: true, rating: true } } }, orderBy: { createdAt: "asc" } },
+        quotes: { include: { worker: { select: { id: true, rating: true, user: { select: { name: true } } } } }, orderBy: { createdAt: "asc" } },
         review: true,
       },
     });
@@ -153,7 +153,7 @@ export class JobsController {
   async cancel(@CurrentUser() u: AuthUser, @Param("id") id: string, @Body() d: CancelDto) {
     const job = await this.prisma.job.findUnique({ where: { id }, include: { worker: true } });
     if (!job || job.customerId !== u.sub) throw new BizError("Việc không thuộc về bạn.", 403);
-    if (![JobStatus.OPEN, JobStatus.ASSIGNED].includes(job.status)) throw new BizError("Việc đang thi công không thể hủy.");
+    if (!([JobStatus.OPEN, JobStatus.ASSIGNED] as JobStatus[]).includes(job.status)) throw new BizError("Việc đang thi công không thể hủy.");
     const updated = await this.prisma.job.update({
       where: { id },
       data: { status: JobStatus.CANCELLED, cancelReason: d.reason || "Khách hàng chủ động hủy" },
@@ -167,14 +167,14 @@ export class JobsController {
   /** Đặt lịch trực tiếp với một thợ (tạo job ASSIGNED + quote ACCEPTED) */
   @Roles(Role.CUSTOMER) @Post("book")
   async book(@CurrentUser() u: AuthUser, @Body() d: { workerId: string; categoryId: string; district: string; address: string; scheduledAt: string; note?: string; budget: number }) {
-    const w = await this.prisma.workerProfile.findUnique({ where: { id: d.workerId } });
+    const w = await this.prisma.workerProfile.findUnique({ where: { id: d.workerId }, include: { user: { select: { name: true } } } });
     if (!w) throw new BizError("Không tìm thấy thợ.", 404);
     return this.prisma.$transaction(async (tx) => {
       const job = await tx.job.create({
         data: {
           code: `HS-${1001 + (await tx.job.count())}`,
           customerId: u.sub, workerId: w.id, categoryId: d.categoryId,
-          title: `Đặt lịch với ${w.name}`,
+          title: `Đặt lịch với ${w.user.name}`,
           description: d.note?.trim() || "Khách đặt lịch trực tiếp từ hồ sơ thợ.",
           district: d.district, address: d.address, budget: d.budget,
           status: JobStatus.ASSIGNED, scheduledAt: d.scheduledAt,
