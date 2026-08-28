@@ -22,7 +22,21 @@ npm run seed                  # nạp dữ liệu demo (khớp ID với frontend
 npm run dev                   # chạy tại http://localhost:3001
 ```
 
-Kiểm tra nhanh: `GET http://localhost:3001/api/v1/categories`
+Kiểm tra nhanh (mở bằng trình duyệt):
+
+| URL | Kết quả mong đợi |
+|---|---|
+| `http://localhost:3001/api/v1` | `{"name":"Home Services API","status":"ok",...}` — server đang sống |
+| `http://localhost:3001/api/v1/categories` | Mảng JSON 8 danh mục dịch vụ |
+| `http://localhost:3001/api/v1/workers` | Mảng JSON danh sách thợ (kèm matchScore) |
+
+Các endpoint cần đăng nhập (jobs, quotes, admin...) phải gửi kèm `Authorization: Bearer <token>` — lấy token bằng cách đăng nhập qua frontend hoặc:
+
+```bash
+curl -X POST http://localhost:3001/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"khach@demo.vn","password":"123456"}'
+```
 
 ## 3. Tài khoản demo (mật khẩu: 123456)
 

@@ -3,6 +3,7 @@ import { APP_GUARD } from "@nestjs/core";
 import { ConfigModule } from "@nestjs/config";
 import { PrismaService } from "./prisma.service";
 import { JwtAuthGuard } from "./common";
+import { HealthController } from "./health";
 import { AuthModule } from "./auth/auth";
 import { UsersModule } from "./users/users";
 import { WorkersModule } from "./workers/workers";
@@ -33,6 +34,7 @@ class PrismaModule {}
     AdminModule,
     PaymentsModule,
   ],
+  controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
 })
 export class AppModule {}
