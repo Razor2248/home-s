@@ -1,7 +1,16 @@
 /**
- * HTTP client cho Giai đoạn 3 — nối frontend với backend NestJS.
- * Cách dùng: thay ruột các hàm trong src/lib/api.ts bằng http.get/post/...
+ * HTTP client — tầng thấp nhất, bọc fetch để nói chuyện với backend NestJS.
+ *
+ * Luồng dữ liệu đã ĐƯỢC nối hoàn chỉnh (không cần làm thêm gì ở đây):
+ *
+ *   Component (UI)
+ *     → src/lib/api.ts        mỗi hàm tự kiểm tra chế độ (demo localStorage hay server)
+ *     → src/lib/remote.ts     các hàm REST gọi đúng endpoint backend (DÙNG http ở file này)
+ *     → src/lib/http.ts       fetch + JWT + xử lý lỗi tiếng Việt  ← BẠN ĐANG Ở ĐÂY
+ *     → Backend NestJS        http://localhost:3001/api/v1
+ *
  * Token JWT lấy từ localStorage; lỗi trả về message tiếng Việt từ server.
+ * Chi tiết xem trang /docs → tab "Tích hợp GĐ3".
  */
 import { getApiUrl } from "./config";
 
