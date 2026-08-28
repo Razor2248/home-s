@@ -42,7 +42,10 @@ export function mapUser(u: Any): User {
 }
 
 export function mapQuote(q: Any): Quote {
-  return { id: q.id, jobId: q.jobId, workerId: q.workerId, price: q.price, eta: q.eta ?? "", message: q.message ?? "", status: low(q.status), createdAt: ts(q.createdAt) ?? Date.now() };
+  return {
+    id: q.id, jobId: q.jobId, workerId: q.workerId, price: q.price ?? 0, eta: q.eta ?? "",
+    message: q.message ?? "", status: low(q.status ?? "SENT"), createdAt: ts(q.createdAt) ?? Date.now(),
+  };
 }
 
 export function mapReview(r: Any, codeMap?: Map<string, string>): Review {
@@ -71,7 +74,7 @@ export function mapJob(j: Any, out: { quotes: Quote[]; reviews: Review[]; users:
   return {
     id: j.id, code: j.code, customerId: j.customerId, workerId: j.workerId ?? undefined,
     title: j.title, categoryId: j.categoryId, description: j.description, district: j.district,
-    address: j.address, budget: j.budget, urgency: low(j.urgency ?? "NORMAL"), status: low(j.status),
+    address: j.address, budget: j.budget, urgency: low(j.urgency ?? "NORMAL"), status: low(j.status ?? "OPEN"),
     createdAt: ts(j.createdAt) ?? Date.now(), scheduledAt: j.scheduledAt ?? undefined,
     startedAt: ts(j.startedAt), doneAt: ts(j.doneAt), cancelReason: j.cancelReason ?? undefined,
   };

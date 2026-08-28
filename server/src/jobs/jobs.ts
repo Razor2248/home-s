@@ -86,7 +86,11 @@ export class JobsController {
     return this.prisma.job.findMany({
       where: { status: JobStatus.OPEN, ...(all ? {} : { categoryId: w.categoryId }) },
       orderBy: { createdAt: "desc" },
-      include: { category: true, quotes: { select: { id: true, workerId: true } }, customer: { select: { name: true } } },
+      include: {
+        category: true,
+        quotes: { select: { id: true, workerId: true, status: true, price: true, createdAt: true } },
+        customer: { select: { id: true, name: true } },
+      },
     });
   }
 
