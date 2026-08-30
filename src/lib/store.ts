@@ -24,6 +24,8 @@ function load(): DB {
         ...parsed,
         payments: parsed.payments ?? [],
         settings: parsed.settings ?? { platformFee: 10 },
+        categoryChanges: parsed.categoryChanges ?? [],
+        passwordResets: parsed.passwordResets ?? [],
       };
     }
   } catch {
@@ -108,6 +110,7 @@ export function hydrateDB(partial: Partial<DB>) {
     if (partial.notifications) d.notifications = partial.notifications;
     if (partial.payments) d.payments = partial.payments;
     if (partial.settings) d.settings = partial.settings;
+    if (partial.categoryChanges) d.categoryChanges = partial.categoryChanges;
   });
 }
 

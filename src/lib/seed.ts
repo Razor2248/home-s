@@ -9,6 +9,14 @@ export function seedDB(): DB {
     seq: 1009,
     settings: { platformFee: 10 },
     payments: [],
+    categoryChanges: [
+      {
+        id: "ccr-01", workerId: "w-minh", workerName: "Hoàng Nhật Minh", fromCategoryId: "dien", toCategoryId: "dieuhoa",
+        note: "Em mới học xong khóa lắp đặt – bảo trì máy lạnh, muốn mở rộng nhận thêm việc điện lạnh.",
+        status: "pending", createdAt: now - 5 * 3600_000,
+      },
+    ],
+    passwordResets: [],
     categories: [
       { id: "dien", name: "Sửa điện dân dụng", icon: "bolt", color: "#f4581c", priceMin: 150000, priceMax: 500000, unit: "lần" },
       { id: "nuoc", name: "Sửa ống nước", icon: "droplet", color: "#2f6fd0", priceMin: 150000, priceMax: 450000, unit: "lần" },

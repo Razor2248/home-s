@@ -3,7 +3,7 @@ import { Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { DashShell, type NavItem } from "../../components/DashShell";
 import AccountSettings from "../AccountSettings";
 import { useDB, useSession } from "../../lib/store";
-import { completeJob, getFeeBreakdown, sendQuote, startJob, toggleAvailable, updateWorkerProfile } from "../../lib/api";
+import { completeJob, getFeeBreakdown, requestCategoryChange, sendQuote, startJob, toggleAvailable, updateWorkerProfile } from "../../lib/api";
 import { APPROVAL, cls, fmtK, fmtVND, hourShort, timeAgo } from "../../lib/format";
 import { CATEGORY_ICON, FALLBACK_ICON, Icon, type IconName } from "../../components/Icons";
 import { Badge, Bars, Button, EmptyState, Field, JobPill, Modal, Stars, Tabs, useToast } from "../../components/ui";
@@ -199,9 +199,11 @@ function JobBoard() {
   const db = useDB();
   const w = useMyWorker();
   const { push } = useToast();
+  const navigate = useNavigate();
   const [quoteFor, setQuoteFor] = useState<Job | null>(null);
   if (!w) return null;
   const jobs = db.jobs.filter((j) => j.categoryId === w.categoryId && j.status === "open").sort((a, b) => b.createdAt - a.createdAt);
+  const otherJobs = db.jobs.filter((j) => j.categoryId !== w.categoryId && j.status === "open");
   const myQuoteIds = db.quotes.filter((q) => q.workerId === w.id).map((q) => q.jobId);
 
   return (
@@ -211,8 +213,21 @@ function JobBoard() {
         <h2 className="font-display text-[24px] font-extrabold text-ink-900">Sàn việc {db.categories.find((c) => c.id === w.categoryId)?.name}</h2>
         <p className="mt-0.5 text-[13.5px] text-mute">{jobs.length} việc đang chờ báo giá · gửi giá sớm để được khách chú ý</p>
       </div>
+      {otherJobs.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-ink-900/15 bg-ink-900/[0.04] px-4 py-3">
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-ink-900 text-paper"><Icon name="sparkle" size={17} /></span>
+          <p className="min-w-0 flex-1 text-[13px] font-semibold text-ink-700">
+            Còn <b className="text-safety-600">{otherJobs.length} việc</b> ở danh mục khác chưa đúng nghề của bạn — muốn nhận? Hãy yêu cầu đổi danh mục (Admin duyệt).
+          </p>
+          <Button variant="outline" size="sm" icon="tag" onClick={() => navigate("/app/worker/profile")}>Đổi danh mục</Button>
+        </div>
+      )}
       {jobs.length === 0 ? (
-        <EmptyState icon="briefcase" title="Chưa có việc mới" desc="Khách chưa đăng việc nào trong danh mục của bạn hôm nay. Quay lại sau nhé!" />
+        <EmptyState icon="briefcase" title="Chưa có việc mới" desc="Khách chưa đăng việc nào trong danh mục của bạn hôm nay. Quay lại sau nhé!">
+          {otherJobs.length > 0 && (
+            <Button variant="outline" size="sm" icon="tag" onClick={() => navigate("/app/worker/profile")}>Yêu cầu đổi danh mục nghề</Button>
+          )}
+        </EmptyState>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {jobs.map((j, i) => {
@@ -638,9 +653,16 @@ function Profile() {
   const [priceFrom, setPriceFrom] = useState(w?.priceFrom ?? 0);
   const [priceList, setPriceList] = useState(w?.priceList ?? []);
   const [busy, setBusy] = useState(false);
+  const [toCat, setToCat] = useState("");
+  const [note, setNote] = useState("");
+  const [busyChange, setBusyChange] = useState(false);
+  const [showForm, setShowForm] = useState(false);
   if (!w) return null;
   const cat = db.categories.find((c) => c.id === w.categoryId);
   const meta = APPROVAL[w.approval];
+  const myChanges = db.categoryChanges.filter((c) => c.workerId === w.id);
+  const pendingChange = myChanges.find((c) => c.status === "pending");
+  const lastRejected = myChanges.find((c) => c.status === "rejected");
 
   const save = async () => {
     setBusy(true);
@@ -649,10 +671,85 @@ function Profile() {
     push("Đã lưu hồ sơ. Khách hàng sẽ thấy thông tin mới ngay.");
   };
 
+  const submitChange = async () => {
+    if (!toCat) { push("Chọn danh mục bạn muốn chuyển sang.", "err"); return; }
+    setBusyChange(true);
+    try {
+      await requestCategoryChange(w.id, toCat, note);
+      push("Đã gửi yêu cầu đổi danh mục — chờ Admin duyệt nhé!");
+      setShowForm(false);
+      setNote("");
+      setToCat("");
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Có lỗi xảy ra.", "err");
+    } finally {
+      setBusyChange(false);
+    }
+  };
+
   return (
     <div className="anim-fadeUp grid gap-5 lg:grid-cols-[1.5fr_1fr]">
       <div className="space-y-5">
         {w.approval !== "approved" && <PendingBanner w={w} />}
+
+        {/* Đổi danh mục nghề — cần Admin duyệt */}
+        <div className="rounded-xl border border-line bg-card p-5">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-2 font-display text-[16px] font-bold text-ink-900">
+              <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-safety-100 text-safety-600"><Icon name="tag" size={16} /></span>
+              Đổi danh mục nghề
+            </h3>
+            {!pendingChange && !showForm && (
+              <Button variant="outline" size="sm" icon="plus" onClick={() => setShowForm(true)}>Gửi yêu cầu</Button>
+            )}
+          </div>
+
+          {pendingChange ? (
+            <div className="anim-fadeUp mt-4 rounded-xl border border-warn-600/30 bg-warn-100/50 p-4">
+              <p className="flex items-center gap-2 text-[13px] font-bold text-warn-600">
+                <Icon name="clock" size={15} className="live-dot rounded-full" /> Đang chờ Admin duyệt · gửi {timeAgo(pendingChange.createdAt)}
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2.5">
+                <CatChip catId={pendingChange.fromCategoryId} />
+                <Icon name="arrowR" size={16} className="text-mute" />
+                <CatChip catId={pendingChange.toCategoryId} />
+              </div>
+              {pendingChange.note && <p className="mt-2.5 text-[12.5px] italic text-ink-700">“{pendingChange.note}”</p>}
+              <p className="mt-2.5 text-[12px] text-mute">Sau khi được duyệt, sàn việc của bạn sẽ tự chuyển sang danh mục mới.</p>
+            </div>
+          ) : showForm ? (
+            <div className="anim-fadeUp mt-4 space-y-3.5">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <CatChip catId={w.categoryId} />
+                <Icon name="arrowR" size={16} className="text-mute" />
+                <select className="field-input w-auto min-w-[200px] flex-1" value={toCat} onChange={(e) => setToCat(e.target.value)}>
+                  <option value="">— Chọn danh mục mới —</option>
+                  {db.categories.filter((c) => c.id !== w.categoryId).map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <Field label="Lý do / lời nhắn cho Admin">
+                <textarea rows={2} className="field-input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="VD: đã có chứng chỉ nghề mới, muốn mở rộng nhận việc…" />
+              </Field>
+              {lastRejected && (
+                <p className="rounded-lg bg-danger-100/60 px-3.5 py-2 text-[12.5px] font-semibold text-danger-600">
+                  Yêu cầu trước bị từ chối: {lastRejected.rejectReason}
+                </p>
+              )}
+              <div className="flex gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setShowForm(false)}>Hủy</Button>
+                <Button size="sm" icon="send" loading={busyChange} onClick={submitChange}>Gửi yêu cầu duyệt</Button>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-2 text-[13px] text-mute">
+              Đang nhận việc: <b className="text-ink-900">{cat?.name}</b>. Muốn nhận việc ở nghề khác? Gửi yêu cầu — Admin duyệt xong là sàn việc cập nhật ngay.
+              {lastRejected && <span className="mt-1.5 block rounded-lg bg-danger-100/60 px-3 py-2 text-[12px] font-semibold text-danger-600">Yêu cầu gần nhất bị từ chối: {lastRejected.rejectReason}</span>}
+            </p>
+          )}
+        </div>
+
         <div className="rounded-xl border border-line bg-card p-6">
           <div className="flex items-center gap-4">
             <span className="flex h-16 w-16 items-center justify-center rounded-2xl font-display text-[24px] font-bold text-white" style={{ background: cat?.color }}>
@@ -716,5 +813,17 @@ function Profile() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Chip danh mục có màu nhận diện */
+function CatChip({ catId }: { catId: string }) {
+  const db = useDB();
+  const c = db.categories.find((x) => x.id === catId);
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12.5px] font-bold text-ink-800">
+      <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c?.color ?? "#999" }} />
+      {c?.name ?? catId}
+    </span>
   );
 }

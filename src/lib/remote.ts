@@ -6,7 +6,7 @@
 import { http, TOKEN_KEY, REFRESH_KEY } from "./http";
 import { pickColor } from "./format";
 import type {
-  Category, ChatMessage, DB, Job, Notification, Payment, Quote, Review, Role, User, WorkerProfile, WorkerRegisterInput,
+  Category, CategoryChange, ChatMessage, DB, Job, Notification, Payment, Quote, Review, Role, User, WorkerProfile, WorkerRegisterInput,
 } from "./types";
 
 /* ================= mapper: server → UI ================= */
@@ -86,6 +86,15 @@ export function mapMessage(m: Any): ChatMessage {
 
 export function mapNotif(n: Any): Notification {
   return { id: n.id, userId: n.userId, text: n.text, icon: n.icon ?? "bell", read: n.read ?? false, createdAt: ts(n.createdAt) ?? Date.now() };
+}
+
+export function mapCategoryChange(c: Any): CategoryChange {
+  return {
+    id: c.id, workerId: c.workerId, workerName: c.worker?.user?.name ?? c.workerName ?? "Thợ",
+    fromCategoryId: c.fromCategoryId, toCategoryId: c.toCategoryId, note: c.note ?? "",
+    status: low(c.status ?? "PENDING"), rejectReason: c.rejectReason ?? undefined,
+    createdAt: ts(c.createdAt) ?? Date.now(),
+  };
 }
 
 export function mapPayment(p: Any): Payment {
@@ -180,6 +189,16 @@ export const remote = {
   resolveReview: (id: string, action: "keep" | "hide") => http.post(`/admin/reviews/${id}/resolve`, { action }),
   adminPaymentStats: () => http.get<{ count: number; gross: number; platformFee: number; workerPayout: number }>("/admin/payments/stats"),
   adminRevenue: () => http.get<RevenueData>("/admin/stats/revenue"),
+
+  /* ---- đổi danh mục nghề + quên mật khẩu (bản mở rộng) ---- */
+  refreshCategories: () => http.get<Any[]>("/categories").then((cs) => cs.map(mapCategory)),
+  myCategoryChanges: () => http.get<Any[]>("/workers/me/category-changes").then((cs) => cs.map(mapCategoryChange)),
+  requestCategoryChange: (toCategoryId: string, note: string) => http.post("/workers/me/category-changes", { toCategoryId, note }),
+  adminCategoryChanges: () => http.get<Any[]>("/admin/category-changes").then((cs) => cs.map(mapCategoryChange)),
+  approveCategoryChange: (id: string) => http.post(`/admin/category-changes/${id}/approve`, {}),
+  rejectCategoryChange: (id: string, reason: string) => http.post(`/admin/category-changes/${id}/reject`, { reason }),
+  requestPasswordReset: (email: string) => http.post<{ code: string }>("/auth/forgot-password", { email }),
+  resetPassword: (email: string, code: string, password: string) => http.post("/auth/reset-password", { email, code, password }),
 };
 
 /* ================= dữ liệu doanh thu (Giai đoạn mở rộng) ================= */
@@ -209,7 +228,10 @@ const dedupe = <T extends { id: string }>(xs: T[]) => {
  * để hydrate vào store — UI giữ nguyên, chỉ đổi nguồn dữ liệu.
  */
 export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
-  const out = { quotes: [] as Quote[], reviews: [] as Review[], users: [] as User[], payments: [] as Payment[] };
+  const out = {
+    quotes: [] as Quote[], reviews: [] as Review[], users: [] as User[],
+    payments: [] as Payment[], categoryChanges: [] as CategoryChange[],
+  };
   const [categories, notifications, me, fee] = await Promise.all([
     remote.categories(),
     remote.notifications(),
@@ -252,15 +274,19 @@ export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
     chats = msgLists.flat();
     // thanh toán cho các việc thợ được gán (Giai đoạn 4)
     out.payments = await remote.workerPayments().catch(() => []);
+    // yêu cầu đổi danh mục của chính mình (bản mở rộng)
+    out.categoryChanges = await remote.myCategoryChanges().catch(() => []);
   } else {
-    const [rawJobs, rawWorkers, rawUsers, rawReviews] = await Promise.all([
+    const [rawJobs, rawWorkers, rawUsers, rawReviews, rawChanges] = await Promise.all([
       remote.adminJobs(), remote.adminWorkers(), remote.adminUsers(), remote.adminReviews(),
+      remote.adminCategoryChanges().catch(() => []),
     ]);
     jobs = rawJobs.map((j) => mapJob(j, out));
     workers = rawWorkers.map(mapWorker);
     const codeMap = new Map(jobs.map((j) => [j.id, j.code]));
     out.users.push(...rawUsers.map(mapUser));
     rawReviews.forEach((r) => out.reviews.push(mapReview(r, codeMap)));
+    out.categoryChanges = rawChanges;
   }
 
   return {
@@ -274,5 +300,6 @@ export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
     chats: dedupe(chats).sort((a, b) => a.createdAt - b.createdAt),
     payments: dedupe(out.payments),
     settings: { platformFee: fee },
+    categoryChanges: dedupe(out.categoryChanges),
   };
 }

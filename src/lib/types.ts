@@ -18,6 +18,28 @@ export interface Payment {
   paidAt?: number;
 }
 
+/** Yêu cầu đổi danh mục nghề của thợ — cần admin phê duyệt */
+export interface CategoryChange {
+  id: string;
+  workerId: string;
+  workerName: string;
+  fromCategoryId: string;
+  toCategoryId: string;
+  note: string;
+  status: Approval;
+  rejectReason?: string;
+  createdAt: number;
+}
+
+/** Mã đặt lại mật khẩu (OTP sandbox) */
+export interface PasswordReset {
+  id: string;
+  email: string;
+  code: string;
+  expiresAt: number;
+  used: boolean;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -139,6 +161,8 @@ export interface DB {
   notifications: Notification[];
   payments: Payment[];
   settings: { platformFee: number };
+  categoryChanges: CategoryChange[];
+  passwordResets: PasswordReset[];
 }
 
 export interface CreateJobInput {

@@ -12,7 +12,7 @@ import {
   registerCustomer as remoteRegisterCustomer, registerWorker as remoteRegisterWorker,
 } from "./remote";
 import type {
-  BookInput, Category, CreateJobInput, DB, Job, Payment, PaymentMethod, Quote, Role, User, WorkerProfile, WorkerRegisterInput,
+  BookInput, Category, CategoryChange, CreateJobInput, DB, Job, Payment, PaymentMethod, Quote, Role, User, WorkerProfile, WorkerRegisterInput,
 } from "./types";
 
 const delay = (ms = 380) => new Promise((r) => setTimeout(r, ms));
@@ -549,6 +549,95 @@ export async function changePassword(userId: string, current: string, next: stri
   if (u.password !== current) throw new Error("Mật khẩu hiện tại không đúng.");
   mutate((db) => {
     db.users = db.users.map((x) => (x.id === userId ? { ...x, password: next } : x));
+  });
+}
+
+/* ================= ĐỔI DANH MỤC NGHỀ (cần admin duyệt) ================= */
+export async function requestCategoryChange(workerId: string, toCategoryId: string, note: string) {
+  if (isApiMode()) {
+    await remote.requestCategoryChange(toCategoryId, note);
+    return after();
+  }
+  await delay(300);
+  if (getDB().categoryChanges.some((c) => c.workerId === workerId && c.status === "pending"))
+    throw new Error("Bạn đã có một yêu cầu đang chờ duyệt.");
+  const w = getDB().workers.find((x) => x.id === workerId);
+  if (!w) throw new Error("Không tìm thấy hồ sơ thợ.");
+  const req: CategoryChange = {
+    id: uid("ccr"), workerId, workerName: w.name, fromCategoryId: w.categoryId,
+    toCategoryId, note: note.trim(), status: "pending", createdAt: Date.now(),
+  };
+  mutate((db) => {
+    db.categoryChanges = [req, ...db.categoryChanges];
+    pushNotif(db, "u-admin", `${w.name} yêu cầu đổi danh mục nghề`, "tag");
+  });
+}
+
+export async function approveCategoryChange(id: string) {
+  if (isApiMode()) {
+    await remote.approveCategoryChange(id);
+    return after();
+  }
+  await delay(300);
+  mutate((db) => {
+    const r = db.categoryChanges.find((c) => c.id === id);
+    if (!r) return;
+    db.categoryChanges = db.categoryChanges.map((c) => (c.id === id ? { ...c, status: "approved", rejectReason: undefined } : c));
+    db.workers = db.workers.map((w) => (w.id === r.workerId ? { ...w, categoryId: r.toCategoryId } : w));
+    const w = db.workers.find((x) => x.id === r.workerId);
+    if (w) pushNotif(db, w.userId, "Yêu cầu đổi danh mục đã được duyệt — sàn việc của bạn đã cập nhật!", "check");
+  });
+}
+
+export async function rejectCategoryChange(id: string, reason: string) {
+  if (isApiMode()) {
+    await remote.rejectCategoryChange(id, reason);
+    return after();
+  }
+  await delay(300);
+  mutate((db) => {
+    const r = db.categoryChanges.find((c) => c.id === id);
+    db.categoryChanges = db.categoryChanges.map((c) => (c.id === id ? { ...c, status: "rejected", rejectReason: reason } : c));
+    if (r) {
+      const w = db.workers.find((x) => x.id === r.workerId);
+      if (w) pushNotif(db, w.userId, `Yêu cầu đổi danh mục bị từ chối: ${reason}`, "x");
+    }
+  });
+}
+
+/* ================= QUÊN MẬT KHẨU (OTP sandbox) ================= */
+export async function requestPasswordReset(email: string): Promise<{ code: string }> {
+  if (isApiMode()) return remote.requestPasswordReset(email);
+  await delay(500);
+  const u = getDB().users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
+  if (!u) throw new Error("Email không tồn tại trong hệ thống.");
+  if (u.blocked) throw new Error("Tài khoản đã bị khóa. Liên hệ quản trị viên.");
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  mutate((db) => {
+    db.passwordResets = [
+      { id: uid("pr"), email: u.email, code, expiresAt: Date.now() + 10 * 60_000, used: false },
+      ...db.passwordResets,
+    ];
+  });
+  return { code };
+}
+
+export async function resetPassword(email: string, code: string, newPassword: string) {
+  if (isApiMode()) {
+    await remote.resetPassword(email, code, newPassword);
+    return;
+  }
+  await delay(500);
+  const db = getDB();
+  const norm = email.trim().toLowerCase();
+  const u = db.users.find((x) => x.email.toLowerCase() === norm);
+  if (!u) throw new Error("Email không tồn tại trong hệ thống.");
+  const r = db.passwordResets.find((x) => x.email.toLowerCase() === norm && !x.used && x.expiresAt > Date.now());
+  if (!r) throw new Error("Mã chưa được gửi hoặc đã hết hạn (10 phút). Hãy yêu cầu mã mới.");
+  if (r.code !== code.trim()) throw new Error("Mã xác thực không đúng.");
+  mutate((d) => {
+    d.passwordResets = d.passwordResets.map((x) => (x.id === r.id ? { ...x, used: true } : x));
+    d.users = d.users.map((x) => (x.id === u.id ? { ...x, password: newPassword } : x));
   });
 }
 

@@ -1,9 +1,9 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useNavigate } from "react-router-dom";
-import { login, logout, registerCustomer, registerWorker, resetAll } from "../lib/api";
+import { login, logout, registerCustomer, registerWorker, requestPasswordReset, resetAll, resetPassword } from "../lib/api";
 import { remote } from "../lib/remote";
-import { getDataMode, getApiUrl, setDataMode, setApiUrl, type DataMode } from "../lib/config";
-import { useSession } from "../lib/store";
+import { getDataMode, getApiUrl, isApiMode, setDataMode, setApiUrl, type DataMode } from "../lib/config";
+import { hydrateDB, useSession } from "../lib/store";
 import { cls, DISTRICTS, takeIntent } from "../lib/format";
 import { Icon, Logo, type IconName } from "../components/Icons";
 import { Button, Field, useToast } from "../components/ui";
@@ -31,6 +31,14 @@ export default function Login() {
   const [apiUrl, setApiUrlState] = useState(getApiUrl());
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [forgotOpen, setForgotOpen] = useState(false);
+
+  // Chế độ API: tải lại danh mục từ server để thợ đăng ký thấy cả danh mục admin vừa thêm
+  useEffect(() => {
+    if (isApiMode()) {
+      remote.refreshCategories().then((cats) => hydrateDB({ categories: cats })).catch(() => {});
+    }
+  }, []);
 
   const switchMode = (m: DataMode) => {
     setDataModeState(m);
@@ -280,8 +288,20 @@ export default function Login() {
               <Button type="submit" size="lg" loading={loading} className="w-full" iconRight={loading ? undefined : "arrowR"}>
                 {mode === "login" ? "Đăng nhập" : regRole === "customer" ? "Tạo tài khoản khách hàng" : "Gửi hồ sơ thợ"}
               </Button>
+
+              {mode === "login" && (
+                <button
+                  type="button"
+                  onClick={() => setForgotOpen(true)}
+                  className="mx-auto mt-3.5 flex items-center gap-1.5 text-[13px] font-semibold text-mute transition hover:text-safety-600"
+                >
+                  <Icon name="lock" size={13} /> Quên mật khẩu?
+                </button>
+              )}
             </form>
           </div>
+
+          {forgotOpen && <ForgotModal onClose={() => setForgotOpen(false)} />}
 
           {/* demo nhanh */}
           <div className="mt-5">
@@ -305,6 +325,133 @@ export default function Login() {
             )}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================= QUÊN MẬT KHẨU (OTP sandbox) ================= */
+function ForgotModal({ onClose }: { onClose: () => void }) {
+  const [step, setStep] = useState(1);
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [sentCode, setSentCode] = useState("");
+  const [pw, setPw] = useState("");
+  const [pw2, setPw2] = useState("");
+  const [err, setErr] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const sendCode = async () => {
+    if (!email.trim()) { setErr("Nhập email của bạn."); return; }
+    setBusy(true); setErr("");
+    try {
+      const r = await requestPasswordReset(email);
+      setSentCode(r.code);
+      setStep(2);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Có lỗi xảy ra.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doReset = async () => {
+    if (code.trim().length !== 6) { setErr("Mã xác thực gồm 6 chữ số."); return; }
+    if (pw.length < 6) { setErr("Mật khẩu mới tối thiểu 6 ký tự."); return; }
+    if (pw !== pw2) { setErr("Mật khẩu xác nhận không khớp."); return; }
+    setBusy(true); setErr("");
+    try {
+      await resetPassword(email, code, pw);
+      setStep(3);
+    } catch (ex) {
+      setErr(ex instanceof Error ? ex.message : "Có lỗi xảy ra.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-ink-950/60 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="anim-pop relative w-full max-w-md rounded-2xl border border-line bg-card p-7 shadow-2xl">
+        <button onClick={onClose} className="absolute right-4 top-4 rounded-lg p-1.5 text-mute transition hover:bg-paper hover:text-ink-900" aria-label="Đóng">
+          <Icon name="x" size={18} />
+        </button>
+
+        {/* bước tiến trình */}
+        <div className="mb-5 flex items-center gap-2">
+          {["Email", "Mã OTP", "Xong"].map((s, i) => (
+            <div key={s} className="flex flex-1 items-center gap-2">
+              <span className={cls(
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full font-display text-[12px] font-bold transition-all",
+                step > i + 1 ? "bg-good-500 text-white" : step === i + 1 ? "bg-safety-500 text-white" : "bg-paper text-mute",
+              )}>
+                {step > i + 1 ? <Icon name="check" size={13} /> : i + 1}
+              </span>
+              <span className={cls("text-[12px] font-bold", step === i + 1 ? "text-ink-900" : "text-mute")}>{s}</span>
+              {i < 2 && <span className={cls("h-[2px] flex-1 rounded-full", step > i + 1 ? "bg-good-500" : "bg-line")} />}
+            </div>
+          ))}
+        </div>
+
+        {step === 1 && (
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-display text-xl font-bold text-ink-900">Quên mật khẩu?</h3>
+              <p className="mt-1 text-[13px] text-mute">Nhập email đăng ký — chúng tôi sẽ gửi mã xác thực 6 số.</p>
+            </div>
+            <Field label="Email">
+              <input className="field-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="ban@email.vn" autoFocus />
+            </Field>
+            {err && <p className="anim-shake flex items-center gap-2 rounded-lg bg-danger-100 px-3.5 py-2.5 text-[13px] font-semibold text-danger-600"><Icon name="alert" size={15} /> {err}</p>}
+            <Button size="lg" loading={busy} onClick={sendCode} className="w-full" iconRight={busy ? undefined : "send"}>Gửi mã xác thực</Button>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="space-y-4">
+            {/* hộp thư sandbox */}
+            <div className="rounded-xl border-2 border-dashed border-safety-500/50 bg-safety-50/60 p-4">
+              <p className="flex items-center gap-2 font-mono text-[10.5px] font-bold uppercase tracking-[0.16em] text-safety-600">
+                <Icon name="send" size={13} /> Hộp thư sandbox — thay cho email thật
+              </p>
+              <p className="mt-2.5 text-center font-mono text-[32px] font-bold tracking-[0.4em] text-ink-900">{sentCode}</p>
+              <p className="mt-1.5 text-center text-[11.5px] text-mute">Mã hết hạn sau 10 phút · chỉ dùng cho bản demo</p>
+            </div>
+            <Field label="Mã xác thực">
+              <input
+                className="field-input text-center font-mono text-[20px] font-bold tracking-[0.35em]"
+                value={code} maxLength={6} autoFocus
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
+                placeholder="••••••"
+              />
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Mật khẩu mới">
+                <input type="password" className="field-input" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="Tối thiểu 6 ký tự" />
+              </Field>
+              <Field label="Xác nhận lại">
+                <input type="password" className="field-input" value={pw2} onChange={(e) => setPw2(e.target.value)} placeholder="Nhập lại" />
+              </Field>
+            </div>
+            {err && <p className="anim-shake flex items-center gap-2 rounded-lg bg-danger-100 px-3.5 py-2.5 text-[13px] font-semibold text-danger-600"><Icon name="alert" size={15} /> {err}</p>}
+            <div className="flex gap-2">
+              <Button variant="ghost" onClick={() => { setStep(1); setErr(""); }}>Quay lại</Button>
+              <Button size="lg" loading={busy} onClick={doReset} className="flex-1" iconRight={busy ? undefined : "check"}>Đặt lại mật khẩu</Button>
+            </div>
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="py-4 text-center">
+            <span className="anim-pop mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-good-500 text-white shadow-[0_8px_24px_-8px_rgba(18,147,111,0.7)]">
+              <Icon name="check" size={30} />
+            </span>
+            <h3 className="mt-4 font-display text-xl font-bold text-ink-900">Đặt lại thành công!</h3>
+            <p className="mt-1 text-[13.5px] text-mute">Mật khẩu mới đã có hiệu lực. Đăng nhập ngay thôi.</p>
+            <Button size="lg" className="mt-5 w-full" onClick={onClose} iconRight="arrowR">Đăng nhập ngay</Button>
+          </div>
+        )}
       </div>
     </div>
   );

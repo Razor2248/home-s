@@ -160,6 +160,45 @@ export class AdminController {
     return w;
   }
 
+  /* ---------- Yêu cầu đổi danh mục nghề ---------- */
+  @Get("category-changes")
+  categoryChanges(@Query("status") status?: string) {
+    return this.prisma.categoryChangeRequest.findMany({
+      where: status ? { status: status as Approval } : {},
+      orderBy: { createdAt: "desc" },
+      include: { worker: { include: { user: { select: { name: true } }, category: true } } },
+    });
+  }
+
+  @Post("category-changes/:id/approve")
+  async approveChange(@Param("id") id: string) {
+    const r = await this.prisma.categoryChangeRequest.findUnique({ where: { id }, include: { worker: true } });
+    if (!r) throw new BizError("Không tìm thấy yêu cầu.", 404);
+    if (r.status !== Approval.PENDING) throw new BizError("Yêu cầu đã được xử lý trước đó.");
+    await this.prisma.$transaction([
+      this.prisma.categoryChangeRequest.update({ where: { id }, data: { status: Approval.APPROVED, rejectReason: null } }),
+      this.prisma.workerProfile.update({ where: { id: r.workerId }, data: { categoryId: r.toCategoryId } }),
+      this.prisma.notification.create({
+        data: { userId: r.worker.userId, text: "Yêu cầu đổi danh mục đã được duyệt — sàn việc của bạn đã cập nhật!", icon: "check" },
+      }),
+    ]);
+    return { ok: true };
+  }
+
+  @Post("category-changes/:id/reject")
+  async rejectChange(@Param("id") id: string, @Body() d: RejectDto) {
+    const r = await this.prisma.categoryChangeRequest.findUnique({ where: { id }, include: { worker: true } });
+    if (!r) throw new BizError("Không tìm thấy yêu cầu.", 404);
+    if (r.status !== Approval.PENDING) throw new BizError("Yêu cầu đã được xử lý trước đó.");
+    await this.prisma.$transaction([
+      this.prisma.categoryChangeRequest.update({ where: { id }, data: { status: Approval.REJECTED, rejectReason: d.reason } }),
+      this.prisma.notification.create({
+        data: { userId: r.worker.userId, text: `Yêu cầu đổi danh mục bị từ chối: ${d.reason}`, icon: "x" },
+      }),
+    ]);
+    return { ok: true };
+  }
+
   /* ---------- Người dùng ---------- */
   @Get("users")
   users(@Query("role") role?: string, @Query("q") q?: string) {

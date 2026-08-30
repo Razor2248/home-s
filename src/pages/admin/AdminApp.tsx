@@ -3,7 +3,7 @@ import { Route, Routes, useNavigate } from "react-router-dom";
 import { DashShell, type NavItem } from "../../components/DashShell";
 import AccountSettings from "../AccountSettings";
 import { useDB, useSession } from "../../lib/store";
-import { addCategory, approveWorker, blockUser, deleteCategory, getPlatformFee, rejectWorker, resolveReview, setPlatformFee, updateCategory } from "../../lib/api";
+import { addCategory, approveCategoryChange, approveWorker, blockUser, deleteCategory, getPlatformFee, rejectCategoryChange, rejectWorker, resolveReview, setPlatformFee, updateCategory } from "../../lib/api";
 import { remote, type RevenueData } from "../../lib/remote";
 import { isApiMode } from "../../lib/config";
 import { APPROVAL, cls, fmtK, fmtVND, timeAgo } from "../../lib/format";
@@ -15,9 +15,11 @@ export default function AdminApp() {
   const db = useDB();
   const pending = db.workers.filter((w) => w.approval === "pending").length;
   const flagged = db.reviews.filter((r) => r.flagged).length;
+  const pendingChanges = db.categoryChanges.filter((c) => c.status === "pending").length;
   const nav: NavItem[] = [
     { to: "/app/admin", label: "Dashboard", icon: "chart", end: true },
     { to: "/app/admin/approvals", label: "Duyệt thợ", icon: "shield", badge: pending },
+    { to: "/app/admin/changes", label: "Đổi danh mục", icon: "tag", badge: pendingChanges },
     { to: "/app/admin/users", label: "Người dùng", icon: "users" },
     { to: "/app/admin/categories", label: "Danh mục", icon: "tag" },
     { to: "/app/admin/reports", label: "Báo cáo vi phạm", icon: "flag", badge: flagged },
@@ -34,6 +36,7 @@ export default function AdminApp() {
         <Route path="reports" element={<Reports />} />
         <Route path="settings" element={<AdminSettings />} />
         <Route path="account" element={<AccountSettings />} />
+        <Route path="changes" element={<CategoryChanges />} />
       </Routes>
     </DashShell>
   );

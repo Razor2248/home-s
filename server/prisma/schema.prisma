@@ -113,11 +113,12 @@ model WorkerProfile {
   badges       String[]  @default([])
   createdAt    DateTime  @default(now())
 
-  jobs       Job[]           @relation("WorkerJobs")
-  quotes     Quote[]
-  reviews    Review[]        @relation("WorkerReviews")
-  priceList  PriceListItem[]
-  favorites  Favorite[]
+  jobs           Job[]           @relation("WorkerJobs")
+  quotes         Quote[]
+  reviews        Review[]        @relation("WorkerReviews")
+  priceList      PriceListItem[]
+  favorites      Favorite[]
+  changeRequests CategoryChangeRequest[]
 
   @@index([categoryId, approval, available])
   @@index([district])
@@ -270,6 +271,34 @@ model Report {
 model Setting {
   key   String @id
   value String
+}
+
+/// Thợ yêu cầu đổi danh mục nghề — cần admin duyệt mới có hiệu lực
+model CategoryChangeRequest {
+  id             String   @id @default(cuid())
+  workerId       String
+  worker         WorkerProfile @relation(fields: [workerId], references: [id], onDelete: Cascade)
+  fromCategoryId String
+  toCategoryId   String
+  note           String   @default("")
+  status         Approval @default(PENDING)
+  rejectReason   String?
+  createdAt      DateTime @default(now())
+
+  @@index([workerId, status])
+  @@index([status])
+}
+
+/// Mã đặt lại mật khẩu — OTP 6 số, hết hạn 10 phút
+model PasswordReset {
+  id        String   @id @default(cuid())
+  userId    String
+  code      String
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
 
 /// Thanh toán (sandbox mô phỏng VNPay) — mỗi việc 1 giao dịch

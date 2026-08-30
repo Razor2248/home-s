@@ -124,6 +124,36 @@ export class AuthService {
     const { passwordHash, ...safe } = user;
     return safe;
   }
+
+  /** Quên mật khẩu — bước 1: sinh OTP 6 số, hết hạn 10 phút */
+  async forgotPassword(email: string) {
+    const u = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    if (!u) throw new BizError("Email không tồn tại trong hệ thống.", 404);
+    if (u.blocked) throw new BizError("Tài khoản đã bị khóa. Liên hệ quản trị viên.", 403);
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    await this.prisma.passwordReset.create({
+      data: { userId: u.id, code, expiresAt: new Date(Date.now() + 10 * 60_000) },
+    });
+    // SANDBOX: bản production sẽ gửi email/SMS thật và KHÔNG trả mã về client
+    return { code, expiresIn: 600 };
+  }
+
+  /** Quên mật khẩu — bước 2: xác thực mã + đặt mật khẩu mới */
+  async resetPassword(email: string, code: string, password: string) {
+    const u = await this.prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
+    if (!u) throw new BizError("Email không tồn tại trong hệ thống.", 404);
+    const r = await this.prisma.passwordReset.findFirst({
+      where: { userId: u.id, used: false, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!r) throw new BizError("Mã chưa được gửi hoặc đã hết hạn (10 phút). Hãy yêu cầu mã mới.");
+    if (r.code !== code.trim()) throw new BizError("Mã xác thực không đúng.");
+    await this.prisma.$transaction([
+      this.prisma.passwordReset.update({ where: { id: r.id }, data: { used: true } }),
+      this.prisma.user.update({ where: { id: u.id }, data: { passwordHash: await bcrypt.hash(password, 12) } }),
+    ]);
+    return { ok: true };
+  }
 }
 
 /* ---------------- CONTROLLER ---------------- */
@@ -149,6 +179,16 @@ export class AuthController {
   @Public() @Post("refresh")
   refresh(@Body() d: RefreshDto) {
     return this.auth.refresh(d.refreshToken);
+  }
+
+  @Public() @Post("forgot-password")
+  forgot(@Body() d: ForgotDto) {
+    return this.auth.forgotPassword(d.email);
+  }
+
+  @Public() @Post("reset-password")
+  reset(@Body() d: ResetDto) {
+    return this.auth.resetPassword(d.email, d.code, d.password);
   }
 
   @Get("me")

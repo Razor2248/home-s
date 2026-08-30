@@ -116,7 +116,18 @@ async function main() {
 
   await prisma.setting.upsert({ where: { key: "platform_fee" }, update: { value: "10" }, create: { key: "platform_fee", value: "10" } });
 
-  console.log("✅ Seed hoàn tất: 8 danh mục · 10 người dùng · 5 thợ · 3 việc · 2 báo giá");
+  // ---------- Yêu cầu đổi danh mục mẫu (chờ admin duyệt) ----------
+  await prisma.categoryChangeRequest.upsert({
+    where: { id: "ccr-01" },
+    update: {},
+    create: {
+      id: "ccr-01", workerId: "w-duc", fromCategoryId: "nuoc", toCategoryId: "dien",
+      note: "Em muốn mở rộng nhận thêm việc điện dân dụng, đã có chứng chỉ an toàn điện.",
+      createdAt: h(5),
+    },
+  });
+
+  console.log("✅ Seed hoàn tất: 8 danh mục · 10 người dùng · 5 thợ · 3 việc · 2 báo giá · 1 yêu cầu đổi danh mục");
 }
 
 main()

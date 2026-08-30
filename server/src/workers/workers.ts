@@ -110,6 +110,43 @@ export class WorkersController {
     return { available: w.available };
   }
 
+  /** Lịch sử yêu cầu đổi danh mục nghề của chính mình */
+  @Roles(Role.WORKER) @Get("me/category-changes")
+  async myChanges(@CurrentUser() u: AuthUser) {
+    const w = await this.prisma.workerProfile.findUnique({ where: { userId: u.sub } });
+    if (!w) throw new BizError("Chưa có hồ sơ thợ.", 404);
+    return this.prisma.categoryChangeRequest.findMany({
+      where: { workerId: w.id },
+      orderBy: { createdAt: "desc" },
+      include: { worker: { include: { user: { select: { name: true } } } } },
+    });
+  }
+
+  /** Gửi yêu cầu đổi danh mục nghề — cần admin duyệt */
+  @Roles(Role.WORKER) @Post("me/category-changes")
+  async requestChange(@CurrentUser() u: AuthUser, @Body() d: { toCategoryId: string; note?: string }) {
+    const w = await this.prisma.workerProfile.findUnique({
+      where: { userId: u.sub },
+      include: { user: { select: { name: true } } },
+    });
+    if (!w) throw new BizError("Chưa có hồ sơ thợ.", 404);
+    if (w.categoryId === d.toCategoryId) throw new BizError("Danh mục mới trùng với danh mục hiện tại.");
+    const pending = await this.prisma.categoryChangeRequest.findFirst({
+      where: { workerId: w.id, status: Approval.PENDING },
+    });
+    if (pending) throw new BizError("Bạn đã có một yêu cầu đang chờ duyệt.");
+    const req = await this.prisma.categoryChangeRequest.create({
+      data: { workerId: w.id, fromCategoryId: w.categoryId, toCategoryId: d.toCategoryId, note: d.note?.trim() ?? "" },
+    });
+    const admin = await this.prisma.user.findFirst({ where: { role: Role.ADMIN } });
+    if (admin) {
+      await this.prisma.notification.create({
+        data: { userId: admin.id, text: `${w.user.name} yêu cầu đổi danh mục nghề`, icon: "tag" },
+      });
+    }
+    return req;
+  }
+
   /* ----- Yêu thích (khách hàng) ----- */
   @Roles(Role.CUSTOMER) @Put(":id/favorite")
   async favorite(@CurrentUser() u: AuthUser, @Param("id") workerId: string) {
