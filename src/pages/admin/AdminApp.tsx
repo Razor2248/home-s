@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Route, Routes, useNavigate } from "react-router-dom";
 import { DashShell, type NavItem } from "../../components/DashShell";
+import AccountSettings from "../AccountSettings";
 import { useDB, useSession } from "../../lib/store";
-import { addCategory, approveWorker, blockUser, deleteCategory, rejectWorker, resolveReview, updateCategory } from "../../lib/api";
+import { addCategory, approveWorker, blockUser, deleteCategory, getPlatformFee, rejectWorker, resolveReview, setPlatformFee, updateCategory } from "../../lib/api";
 import { remote } from "../../lib/remote";
 import { isApiMode } from "../../lib/config";
 import { APPROVAL, cls, fmtK, fmtVND, timeAgo } from "../../lib/format";
@@ -20,6 +21,8 @@ export default function AdminApp() {
     { to: "/app/admin/users", label: "Người dùng", icon: "users" },
     { to: "/app/admin/categories", label: "Danh mục", icon: "tag" },
     { to: "/app/admin/reports", label: "Báo cáo vi phạm", icon: "flag", badge: flagged },
+    { to: "/app/admin/settings", label: "Cài đặt phí", icon: "sliders" },
+    { to: "/app/admin/account", label: "Tài khoản", icon: "user" },
   ];
   return (
     <DashShell role="admin" nav={nav}>
@@ -29,6 +32,8 @@ export default function AdminApp() {
         <Route path="users" element={<Users />} />
         <Route path="categories" element={<Categories />} />
         <Route path="reports" element={<Reports />} />
+        <Route path="settings" element={<AdminSettings />} />
+        <Route path="account" element={<AccountSettings />} />
       </Routes>
     </DashShell>
   );
@@ -42,6 +47,7 @@ function Dashboard() {
   const doneJobs = db.jobs.filter((j) => ["done", "reviewed"].includes(j.status));
   const revenue = doneJobs.reduce((s, j) => s + (db.quotes.find((q) => q.jobId === j.id && q.status === "accepted")?.price ?? j.budget), 0);
   const openJobs = db.jobs.filter((j) => j.status === "open").length;
+  const feeRate = getPlatformFee();
 
   const days = useMemo(
     () =>
@@ -66,7 +72,7 @@ function Dashboard() {
     { i: "users" as IconName, l: "Người dùng", v: String(db.users.length), s: `${db.users.filter((u) => u.role === "customer").length} khách · ${db.users.filter((u) => u.role === "worker").length} thợ`, cls: "bg-ink-800/10 text-ink-700" },
     { i: "wrench" as IconName, l: "Thợ đang hoạt động", v: String(db.workers.filter((w) => w.approval === "approved" && w.available).length), s: `${pendingWorkers.length} hồ sơ chờ duyệt`, cls: "bg-safety-100 text-safety-600" },
     { i: "briefcase" as IconName, l: "Việc đang mở", v: String(openJobs), s: `${db.jobs.length} việc tổng cộng`, cls: "bg-warn-100 text-warn-600" },
-    { i: "wallet" as IconName, l: "Phí nền tảng (10%)", v: fmtK(revenue * 0.1), s: `từ ${fmtK(revenue)} giá trị hoàn thành`, cls: "bg-good-100 text-good-700" },
+    { i: "wallet" as IconName, l: `Phí nền tảng (${feeRate}%)`, v: fmtK(Math.round((revenue * feeRate) / 100)), s: `từ ${fmtK(revenue)} giá trị hoàn thành`, cls: "bg-good-100 text-good-700" },
   ];
 
   // Thống kê thanh toán qua cổng (Giai đoạn 4) — chỉ có ở chế độ API
@@ -535,6 +541,148 @@ function Reports() {
           })}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ================= CÀI ĐẶT PHÍ NỀN TẢNG ================= */
+function AdminSettings() {
+  const { push } = useToast();
+  const current = getPlatformFee();
+  const [input, setInput] = useState(String(current));
+  const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const parsed = Number(input);
+  const valid = Number.isFinite(parsed) && parsed >= 0 && parsed <= 50;
+  const example = 500000;
+  const exampleFee = valid ? Math.round((example * parsed) / 100) : 0;
+
+  const save = async () => {
+    if (!valid) {
+      push("Phí phải là số từ 0 đến 50.", "err");
+      return;
+    }
+    if (parsed < 5 || parsed > 20) {
+      if (!confirming) {
+        setConfirming(true);
+        return;
+      }
+    }
+    setBusy(true);
+    try {
+      await setPlatformFee(parsed);
+      push(`Đã cập nhật phí nền tảng: ${parsed}%. Áp dụng ngay cho mọi giao dịch.`);
+      setConfirming(false);
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Có lỗi khi lưu.", "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="anim-fadeUp space-y-5">
+      <div>
+        <h2 className="font-display text-[24px] font-extrabold text-ink-900">Cài đặt nền tảng</h2>
+        <p className="mt-0.5 text-[13.5px] text-mute">Phí nền tảng là nguồn doanh thu của Home Services — thay đổi có hiệu lực ngay.</p>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+        {/* ---------- thiết lập phí ---------- */}
+        <div className="rounded-xl border border-line bg-card p-6">
+          <div className="flex items-center gap-4">
+            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-safety-100 text-safety-600"><Icon name="wallet" size={24} /></span>
+            <div>
+              <h3 className="font-display text-[18px] font-bold text-ink-900">Phí nền tảng</h3>
+              <p className="text-[12.5px] text-mute">Thu trên mỗi giao dịch thanh toán qua cổng (VNPay sandbox)</p>
+            </div>
+            <span className="ml-auto font-display text-[38px] font-extrabold leading-none text-ink-900">
+              {current}<span className="text-[20px] text-safety-600">%</span>
+            </span>
+          </div>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            {[5, 8, 10, 12, 15].map((p) => (
+              <button
+                key={p}
+                onClick={() => { setInput(String(p)); setConfirming(false); }}
+                className={cls(
+                  "rounded-lg border-[1.5px] px-4 py-2 font-mono text-[13.5px] font-bold transition-all hover:-translate-y-0.5",
+                  Number(input) === p ? "border-safety-500 bg-safety-50 text-safety-600" : "border-line bg-card text-ink-700 hover:border-ink-900",
+                )}
+              >
+                {p}%
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-4 flex gap-2">
+            <div className="relative flex-1">
+              <input
+                type="number" min={0} max={50} value={input}
+                onChange={(e) => { setInput(e.target.value); setConfirming(false); }}
+                className={cls("field-input pr-9 font-mono text-[16px] font-bold", !valid && "border-danger-600")}
+              />
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 font-mono text-[14px] font-bold text-mute">%</span>
+            </div>
+            <Button icon="check" loading={busy} disabled={!valid || Number(input) === current} onClick={save}>
+              Áp dụng
+            </Button>
+          </div>
+          {!valid && <p className="mt-2 flex items-center gap-1.5 text-[12.5px] font-bold text-danger-600"><Icon name="alert" size={13} /> Nhập giá trị từ 0 đến 50.</p>}
+          {confirming && (
+            <div className="anim-pop mt-3 flex items-center justify-between gap-3 rounded-lg bg-warn-100 px-4 py-3">
+              <p className="text-[12.5px] font-bold text-warn-600">Mức {parsed}% khá {parsed < 5 ? "thấp" : "cao"} so với thị trường (8–12%). Vẫn áp dụng?</p>
+              <div className="flex gap-2">
+                <Button size="xs" variant="ghost" onClick={() => setConfirming(false)}>Hủy</Button>
+                <Button size="xs" loading={busy} onClick={save}>Xác nhận</Button>
+              </div>
+            </div>
+          )}
+
+          {/* ví dụ trực quan */}
+          <div className="mt-6 rounded-xl bg-paper/70 p-4">
+            <p className="mb-2.5 text-[11.5px] font-bold uppercase tracking-wide text-mute">Ví dụ với giao dịch {fmtVND(example)}</p>
+            <div className="flex items-center justify-between text-[13.5px]">
+              <span className="text-mute">Nền tảng thu ({valid ? parsed : current}%)</span>
+              <span className="font-mono font-bold text-safety-600">{fmtVND(valid ? exampleFee : Math.round((example * current) / 100))}</span>
+            </div>
+            <div className="mt-1.5 flex items-center justify-between text-[13.5px]">
+              <span className="text-mute">Thợ thực nhận</span>
+              <span className="font-mono font-bold text-good-700">{fmtVND(example - (valid ? exampleFee : Math.round((example * current) / 100)))}</span>
+            </div>
+            <div className="mt-3 flex h-3 overflow-hidden rounded-full">
+              <div className="bg-safety-500 transition-all duration-500" style={{ width: `${valid ? parsed : current}%` }} />
+              <div className="flex-1 bg-good-500 transition-all duration-500" />
+            </div>
+          </div>
+        </div>
+
+        {/* ---------- phạm vi & lưu ý ---------- */}
+        <div className="space-y-4 self-start">
+          <div className="rounded-xl border border-line bg-card p-5">
+            <h3 className="mb-3 font-display text-[16px] font-bold text-ink-900">Phạm vi áp dụng</h3>
+            {[
+              { i: "check" as IconName, t: "Giao dịch VNPay (QR & thẻ)", d: "Hiển thị ở màn hình thanh toán của khách và thống kê doanh thu." },
+              { i: "x" as IconName, t: "Thanh toán khi hoàn thành (COD)", d: "Khách trả trực tiếp cho thợ — nền tảng không thu." },
+              { i: "clock" as IconName, t: "Hiệu lực ngay lập tức", d: "Không ảnh hưởng giao dịch đã thanh toán trước đó." },
+            ].map((x) => (
+              <div key={x.t} className="flex gap-3 border-b border-line/60 py-2.5 last:border-0">
+                <span className={cls("mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg", x.i === "check" ? "bg-good-100 text-good-700" : x.i === "x" ? "bg-danger-100 text-danger-600" : "bg-warn-100 text-warn-600")}>
+                  <Icon name={x.i} size={14} />
+                </span>
+                <div><p className="text-[13px] font-bold text-ink-900">{x.t}</p><p className="text-[12px] leading-relaxed text-mute">{x.d}</p></div>
+              </div>
+            ))}
+          </div>
+          <div className="rounded-xl border border-line bg-ink-900 bg-blueprint-dark p-5 text-paper">
+            <p className="flex items-center gap-2 font-display text-[14.5px] font-bold"><Icon name="sparkle" size={15} className="text-safety-400" /> Gợi ý định giá</p>
+            <p className="mt-2 text-[12.5px] leading-relaxed text-ink-400">
+              Các marketplace dịch vụ gia đình thường thu <b className="text-paper">8–15%</b>. Mức thấp giúp hút thợ mới, mức cao phù hợp khi nền tảng đã có thương hiệu và lượng việc ổn định.
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
 import { Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { DashShell, type NavItem } from "../../components/DashShell";
+import AccountSettings from "../AccountSettings";
 import { useDB, useSession } from "../../lib/store";
 import { completeJob, sendQuote, startJob, toggleAvailable, updateWorkerProfile } from "../../lib/api";
-import { APPROVAL, cls, fmtK, fmtVND, timeAgo } from "../../lib/format";
+import { APPROVAL, cls, fmtK, fmtVND, hourShort, timeAgo } from "../../lib/format";
 import { CATEGORY_ICON, FALLBACK_ICON, Icon, type IconName } from "../../components/Icons";
 import { Badge, Bars, Button, EmptyState, Field, JobPill, Modal, Stars, Tabs, useToast } from "../../components/ui";
 import { ChatPanel } from "../../components/Chat";
-import type { Job, WorkerProfile } from "../../lib/types";
+import type { Job, Quote, WorkerProfile } from "../../lib/types";
 
 const useMyWorker = (): WorkerProfile | undefined => {
   const db = useDB();
@@ -33,7 +34,8 @@ export default function WorkerApp() {
     { to: "/app/worker/board", label: "Việc phù hợp", icon: "briefcase", badge: newJobs },
     { to: "/app/worker/jobs", label: "Việc của tôi", icon: "clipboard", badge: activeJobs },
     { to: "/app/worker/stats", label: "Thống kê", icon: "chart" },
-    { to: "/app/worker/profile", label: "Hồ sơ của tôi", icon: "user" },
+    { to: "/app/worker/profile", label: "Hồ sơ của tôi", icon: "wrench" },
+    { to: "/app/worker/account", label: "Tài khoản", icon: "user" },
   ];
   return (
     <DashShell role="worker" nav={nav}>
@@ -44,6 +46,7 @@ export default function WorkerApp() {
         <Route path="jobs/:id" element={<WorkerJobDetail />} />
         <Route path="stats" element={<Stats />} />
         <Route path="profile" element={<Profile />} />
+        <Route path="account" element={<AccountSettings />} />
       </Routes>
     </DashShell>
   );
@@ -245,45 +248,115 @@ function JobBoard() {
           })}
         </div>
       )}
-      {quoteFor && w && <QuoteModal job={quoteFor} worker={w} onClose={() => setQuoteFor(null)} onDone={() => push("Đã gửi báo giá! Chờ khách lựa chọn nhé.")} />}
+      {quoteFor && w && <QuoteModal job={quoteFor} worker={w} onClose={() => setQuoteFor(null)} />}
     </div>
   );
 }
 
-function QuoteModal({ job, worker, onClose, onDone }: { job: Job; worker: WorkerProfile; onClose: () => void; onDone: () => void }) {
+function QuoteModal({ job, worker, onClose }: { job: Job; worker: WorkerProfile; onClose: () => void }) {
+  const navigate = useNavigate();
+  const { push } = useToast();
   const [f, setF] = useState({ price: Math.min(job.budget, worker.priceFrom + 50000), eta: "Có mặt trong 30 phút", message: "" });
   const [busy, setBusy] = useState(false);
+  const [sent, setSent] = useState<Quote | null>(null);
+  const [msgErr, setMsgErr] = useState(false);
+
   const submit = async () => {
-    if (!f.message.trim()) return;
+    if (!f.message.trim()) {
+      setMsgErr(true);
+      return;
+    }
+    setMsgErr(false);
     setBusy(true);
     try {
-      await sendQuote(job.id, worker.id, { price: Number(f.price) || job.budget, eta: f.eta, message: f.message });
-      onDone();
-      onClose();
+      const q = await sendQuote(job.id, worker.id, { price: Number(f.price) || job.budget, eta: f.eta, message: f.message });
+      setSent(q);
     } catch (e) {
-      onDone();
-      onClose();
+      push(e instanceof Error ? e.message : "Gửi báo giá thất bại, thử lại nhé.", "err");
+    } finally {
+      setBusy(false);
     }
   };
+
   return (
-    <Modal open onClose={onClose} title={`Báo giá cho ${job.code}`} sub={job.title}>
-      <div className="space-y-4">
-        <Field label="Giá đề xuất (₫)" hint={`Khách đặt ngân sách ${fmtVND(job.budget)} — báo sát ngân sách dễ được chọn hơn.`}>
-          <input type="number" step={10000} min={10000} className="field-input" value={f.price} onChange={(e) => setF({ ...f, price: Number(e.target.value) })} />
-        </Field>
-        <Field label="Thời gian có mặt">
-          <select className="field-input" value={f.eta} onChange={(e) => setF({ ...f, eta: e.target.value })}>
-            {["Có mặt trong 30 phút", "Có mặt trong 1 giờ", "Có mặt trong hôm nay", "Có mặt ngày mai"].map((x) => <option key={x}>{x}</option>)}
-          </select>
-        </Field>
-        <Field label="Lời nhắn cho khách">
-          <textarea rows={3} className="field-input" value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} placeholder="Kinh nghiệm xử lý, vật tư đi kèm, cam kết bảo hành…" />
-        </Field>
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" onClick={onClose}>Hủy</Button>
-          <Button icon="send" loading={busy} onClick={submit}>Gửi báo giá</Button>
+    <Modal open onClose={busy ? () => {} : onClose} title={sent ? "Báo giá đã gửi" : `Báo giá cho ${job.code}`} sub={sent ? undefined : job.title}>
+      {sent ? (
+        /* ---------- MÀN HÌNH XÁC NHẬN SAU KHI GỬI ---------- */
+        <div className="anim-pop">
+          <div className="flex flex-col items-center text-center">
+            <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-good-100 text-good-700">
+              <Icon name="check" size={30} />
+            </span>
+            <h4 className="mt-3 font-display text-[19px] font-extrabold text-ink-900">Báo giá đã đến tay khách!</h4>
+            <p className="mt-0.5 text-[13px] text-mute">
+              <span className="font-mono font-bold text-ink-700">{job.code}</span> · {job.title}
+            </p>
+          </div>
+
+          <div className="mt-5 space-y-2.5 rounded-xl bg-paper/70 p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-[13px] text-mute">Giá bạn đề xuất</span>
+              <span className="font-display text-[20px] font-extrabold text-safety-600">{fmtVND(sent.price)}</span>
+            </div>
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-mute">Thời gian có mặt</span>
+              <span className="font-bold text-ink-800">{sent.eta}</span>
+            </div>
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-mute">Gửi lúc</span>
+              <span className="font-mono font-bold text-ink-800">{hourShort(sent.createdAt)}</span>
+            </div>
+            <div className="flex items-center justify-between border-t border-line pt-2.5 text-[13px]">
+              <span className="text-mute">Ngân sách khách đặt</span>
+              <span className="font-bold text-ink-800">{fmtVND(job.budget)}</span>
+            </div>
+          </div>
+
+          <div className="mt-5">
+            <p className="mb-2.5 text-[11.5px] font-bold uppercase tracking-wide text-mute">Điều gì xảy ra tiếp theo?</p>
+            {[
+              "Khách nhận thông báo về báo giá của bạn ngay lập tức.",
+              "Khách so sánh giá và lời nhắn giữa các thợ, rồi chọn một người.",
+              "Được chọn → việc chuyển vào “Việc của tôi”, chat với khách mở ngay.",
+            ].map((s, i) => (
+              <div key={s} className="flex items-start gap-2.5 pb-2.5 last:pb-0">
+                <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-ink-900 font-mono text-[10.5px] font-bold text-paper">{i + 1}</span>
+                <p className="text-[13px] leading-snug text-ink-700">{s}</p>
+              </div>
+            ))}
+          </div>
+
+          <p className="mt-4 flex items-start gap-2 rounded-lg bg-warn-100 px-3.5 py-2.5 text-[12.5px] font-semibold leading-relaxed text-warn-600">
+            <Icon name="sparkle" size={14} className="mt-0.5 shrink-0" />
+            Mẹo: liên hệ khách trong 15 phút sau khi được chọn giúp tăng đáng kể tỷ lệ nhận đánh giá 5★.
+          </p>
+
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose}>Đóng</Button>
+            <Button icon="clipboard" onClick={() => { onClose(); navigate("/app/worker/jobs"); }}>Xem việc của tôi</Button>
+          </div>
         </div>
-      </div>
+      ) : (
+        /* ---------- FORM BÁO GIÁ ---------- */
+        <div className="space-y-4">
+          <Field label="Giá đề xuất (₫)" hint={`Khách đặt ngân sách ${fmtVND(job.budget)} — báo sát ngân sách dễ được chọn hơn.`}>
+            <input type="number" step={10000} min={10000} className="field-input" value={f.price} onChange={(e) => setF({ ...f, price: Number(e.target.value) })} />
+          </Field>
+          <Field label="Thời gian có mặt">
+            <select className="field-input" value={f.eta} onChange={(e) => setF({ ...f, eta: e.target.value })}>
+              {["Có mặt trong 30 phút", "Có mặt trong 1 giờ", "Có mặt trong hôm nay", "Có mặt ngày mai"].map((x) => <option key={x}>{x}</option>)}
+            </select>
+          </Field>
+          <Field label="Lời nhắn cho khách">
+            <textarea rows={3} className={cls("field-input", msgErr && "border-danger-600 focus:border-danger-600 focus:ring-danger-600/20")} value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} placeholder="Kinh nghiệm xử lý, vật tư đi kèm, cam kết bảo hành…" />
+            {msgErr && <span className="mt-1 flex items-center gap-1 text-[12px] font-bold text-danger-600"><Icon name="alert" size={12} /> Viết vài lời nhắn để khách tin tưởng chọn bạn nhé.</span>}
+          </Field>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={onClose}>Hủy</Button>
+            <Button icon="send" loading={busy} onClick={submit}>Gửi báo giá</Button>
+          </div>
+        </div>
+      )}
     </Modal>
   );
 }

@@ -476,6 +476,75 @@ export async function paymentForJob(jobId: string): Promise<Payment | null> {
   return list.find((p) => p.status === "success") ?? list[0] ?? null;
 }
 
+/* ================= TÀI KHOẢN & CÀI ĐẶT NỀN TẢNG ================= */
+
+/** Phí nền tảng (%) — đọc đồng bộ từ store (cả 2 chế độ) */
+export function getPlatformFee(): number {
+  const f = getDB().settings?.platformFee;
+  return typeof f === "number" && f >= 0 ? f : 10;
+}
+
+/** Admin cập nhật phí nền tảng */
+export async function setPlatformFee(fee: number) {
+  if (fee < 0 || fee > 50) throw new Error("Phí phải nằm trong khoảng 0–50%.");
+  if (isApiMode()) {
+    await remote.setPlatformFee(fee);
+    return after();
+  }
+  await delay(300);
+  mutate((db) => {
+    db.settings = { platformFee: fee };
+  });
+}
+
+/** Cập nhật thông tin tài khoản (tên, SĐT, màu avatar) */
+export async function updateAccount(userId: string, patch: { name?: string; phone?: string; avatarColor?: string }) {
+  if (patch.name !== undefined && patch.name.trim().length < 2) throw new Error("Tên hiển thị tối thiểu 2 ký tự.");
+  if (isApiMode()) {
+    await remote.updateAccount({
+      ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+      ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+      ...(patch.avatarColor !== undefined ? { avatarColor: patch.avatarColor } : {}),
+    });
+    return after();
+  }
+  await delay(320);
+  const newName = patch.name !== undefined ? patch.name.trim() : undefined;
+  mutate((db) => {
+    db.users = db.users.map((u) =>
+      u.id === userId
+        ? {
+            ...u,
+            ...(newName !== undefined ? { name: newName } : {}),
+            ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+            ...(patch.avatarColor !== undefined ? { avatarColor: patch.avatarColor } : {}),
+          }
+        : u,
+    );
+    // đồng bộ tên hiển thị trên hồ sơ thợ (chế độ demo)
+    if (newName !== undefined) {
+      db.workers = db.workers.map((w) => (w.userId === userId ? { ...w, name: newName } : w));
+    }
+  });
+}
+
+/** Đổi mật khẩu — yêu cầu mật khẩu hiện tại đúng */
+export async function changePassword(userId: string, current: string, next: string) {
+  if (!current) throw new Error("Nhập mật khẩu hiện tại.");
+  if (next.length < 6) throw new Error("Mật khẩu mới tối thiểu 6 ký tự.");
+  if (isApiMode()) {
+    await remote.changePassword(current, next);
+    return;
+  }
+  await delay(380);
+  const u = getDB().users.find((x) => x.id === userId);
+  if (!u) throw new Error("Không tìm thấy người dùng.");
+  if (u.password !== current) throw new Error("Mật khẩu hiện tại không đúng.");
+  mutate((db) => {
+    db.users = db.users.map((x) => (x.id === userId ? { ...x, password: next } : x));
+  });
+}
+
 /* ================= "AI" HELPERS (rule-based, sẵn sàng nâng cấp LLM) ================= */
 export function matchScore(w: WorkerProfile, ctx: { categoryId?: string; district?: string } = {}): number {
   let s = 50;

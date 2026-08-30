@@ -19,8 +19,12 @@ function load(): DB {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as DB;
-      // tương thích dữ liệu lưu từ phiên bản cũ (chưa có payments)
-      return { ...parsed, payments: parsed.payments ?? [] };
+      // tương thích dữ liệu lưu từ phiên bản cũ (chưa có payments / settings)
+      return {
+        ...parsed,
+        payments: parsed.payments ?? [],
+        settings: parsed.settings ?? { platformFee: 10 },
+      };
     }
   } catch {
     /* ignore */
@@ -103,6 +107,7 @@ export function hydrateDB(partial: Partial<DB>) {
     if (partial.chats) d.chats = partial.chats;
     if (partial.notifications) d.notifications = partial.notifications;
     if (partial.payments) d.payments = partial.payments;
+    if (partial.settings) d.settings = partial.settings;
   });
 }
 

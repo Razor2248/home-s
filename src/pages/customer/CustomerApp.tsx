@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Route, Routes, useNavigate } from "react-router-dom";
 import { DashShell, type NavItem } from "../../components/DashShell";
+import AccountSettings from "../AccountSettings";
 import { useDB, useSession } from "../../lib/store";
 import { bookDirect, createJob, estimateForCategory, matchScore, toggleFavorite } from "../../lib/api";
 import { cls, fmtK, fmtVND, timeAgo, takeIntent, DISTRICTS, URGENCY } from "../../lib/format";
@@ -21,6 +22,7 @@ export default function CustomerApp() {
     { to: "/app/customer/jobs", label: "Việc của tôi", icon: "clipboard", badge: active },
     { to: "/app/customer/messages", label: "Tin nhắn", icon: "chat" },
     { to: "/app/customer/favorites", label: "Thợ yêu thích", icon: "heart" },
+    { to: "/app/customer/account", label: "Tài khoản", icon: "user" },
   ];
   return (
     <DashShell role="customer" nav={nav}>
@@ -32,6 +34,7 @@ export default function CustomerApp() {
         <Route path="jobs/:id" element={<CustomerJobDetail />} />
         <Route path="messages" element={<Messages />} />
         <Route path="favorites" element={<Favorites />} />
+        <Route path="account" element={<AccountSettings />} />
       </Routes>
     </DashShell>
   );

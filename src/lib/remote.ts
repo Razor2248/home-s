@@ -162,6 +162,12 @@ export const remote = {
   workerPayments: () => http.get<Any[]>("/payments/worker").then((ps) => ps.map(mapPayment)),
   paymentByJob: (jobId: string) => http.get<Any | null>(`/payments/job/${jobId}`).then((p) => (p ? mapPayment(p) : null)),
 
+  /* ---- tài khoản & cài đặt nền tảng ---- */
+  updateAccount: (patch: { name?: string; phone?: string; avatarColor?: string }) => http.patch("/users/me", patch),
+  changePassword: (current: string, next: string) => http.post("/users/me/change-password", { current, next }),
+  platformFee: () => http.get<Any>("/settings/platform-fee").then((r) => Number(r?.fee ?? 10)),
+  setPlatformFee: (fee: number) => http.patch("/admin/settings", { platformFee: fee }),
+
   approveWorker: (id: string) => http.post(`/admin/workers/${id}/approve`, {}),
   rejectWorker: (id: string, reason: string) => http.post(`/admin/workers/${id}/reject`, { reason }),
   adminWorkers: () => http.get<Any[]>("/admin/workers"),
@@ -188,7 +194,12 @@ const dedupe = <T extends { id: string }>(xs: T[]) => {
  */
 export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
   const out = { quotes: [] as Quote[], reviews: [] as Review[], users: [] as User[], payments: [] as Payment[] };
-  const [categories, notifications, me] = await Promise.all([remote.categories(), remote.notifications(), remote.me()]);
+  const [categories, notifications, me, fee] = await Promise.all([
+    remote.categories(),
+    remote.notifications(),
+    remote.me(),
+    remote.platformFee().catch(() => 10),
+  ]);
   out.users.push(me);
 
   let workers: WorkerProfile[] = [];
@@ -246,5 +257,6 @@ export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
     reviews: dedupe(out.reviews),
     chats: dedupe(chats).sort((a, b) => a.createdAt - b.createdAt),
     payments: dedupe(out.payments),
+    settings: { platformFee: fee },
   };
 }

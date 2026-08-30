@@ -114,13 +114,19 @@ export class AdminPaymentsController {
 
   @Roles(Role.ADMIN) @Get("stats")
   async stats() {
-    const list = await this.prisma.payment.findMany({ where: { status: PaymentStatus.SUCCESS } });
+    const [list, feeRow] = await Promise.all([
+      this.prisma.payment.findMany({ where: { status: PaymentStatus.SUCCESS } }),
+      this.prisma.setting.findUnique({ where: { key: "platform_fee" } }),
+    ]);
+    const feeRate = feeRow ? Number(feeRow.value) : 10;
     const total = list.reduce((s, p) => s + p.amount, 0);
+    const fee = Math.round((total * feeRate) / 100);
     return {
       count: list.length,
       gross: total,
-      platformFee: Math.round(total * 0.1),
-      workerPayout: total - Math.round(total * 0.1),
+      feeRate,
+      platformFee: fee,
+      workerPayout: total - fee,
       recent: list.slice(-10).reverse(),
     };
   }

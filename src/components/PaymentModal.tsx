@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Modal, Button, useToast } from "./ui";
 import { Icon } from "./Icons";
 import { fmtVND, cls } from "../lib/format";
-import { payForJob } from "../lib/api";
+import { getPlatformFee, payForJob } from "../lib/api";
 import type { Job, Payment, PaymentMethod } from "../lib/types";
 
 type Step = "summary" | "processing" | "success";
@@ -24,7 +24,8 @@ export function PaymentModal({ job, amount, workerName, onClose, onPaid }: {
   const [step, setStep] = useState<Step>("summary");
   const [method, setMethod] = useState<PaymentMethod>("vnpay_qr");
   const [result, setResult] = useState<Payment | null>(null);
-  const fee = Math.round(amount * 0.1);
+  const feeRate = getPlatformFee();
+  const fee = Math.round((amount * feeRate) / 100);
 
   const start = async () => {
     setStep("processing");
@@ -68,7 +69,7 @@ export function PaymentModal({ job, amount, workerName, onClose, onPaid }: {
             )}
             <div className="mt-3 space-y-1.5 border-t border-line pt-3 text-[13px]">
               <div className="flex justify-between text-mute"><span>Giá trị dịch vụ</span><span className="font-semibold text-ink-800">{fmtVND(amount)}</span></div>
-              <div className="flex justify-between text-mute"><span>Phí nền tảng (10%)</span><span className="font-semibold text-ink-800">đã gồm trong giá</span></div>
+              <div className="flex justify-between text-mute"><span>Phí nền tảng ({feeRate}%)</span><span className="font-semibold text-ink-800">đã gồm trong giá</span></div>
               <div className="flex justify-between border-t border-line pt-2 text-[15px] font-extrabold text-ink-900">
                 <span>Tổng thanh toán</span><span className="text-safety-600">{fmtVND(amount)}</span>
               </div>

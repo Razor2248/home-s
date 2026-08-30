@@ -138,6 +138,7 @@ export interface DB {
   chats: ChatMessage[];
   notifications: Notification[];
   payments: Payment[];
+  settings: { platformFee: number };
 }
 
 export interface CreateJobInput {

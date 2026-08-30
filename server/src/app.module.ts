@@ -14,6 +14,7 @@ import { ChatModule } from "./chat/chat";
 import { NotificationsModule } from "./notifications/notifications";
 import { AdminModule } from "./admin/admin";
 import { PaymentsModule } from "./payments/payments";
+import { SettingsModule } from "./settings";
 
 @Global()
 @Module({ providers: [PrismaService], exports: [PrismaService] })
@@ -33,6 +34,7 @@ class PrismaModule {}
     NotificationsModule,
     AdminModule,
     PaymentsModule,
+    SettingsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],
