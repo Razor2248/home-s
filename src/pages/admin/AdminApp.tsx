@@ -4,7 +4,7 @@ import { DashShell, type NavItem } from "../../components/DashShell";
 import AccountSettings from "../AccountSettings";
 import { useDB, useSession } from "../../lib/store";
 import { addCategory, approveWorker, blockUser, deleteCategory, getPlatformFee, rejectWorker, resolveReview, setPlatformFee, updateCategory } from "../../lib/api";
-import { remote } from "../../lib/remote";
+import { remote, type RevenueData } from "../../lib/remote";
 import { isApiMode } from "../../lib/config";
 import { APPROVAL, cls, fmtK, fmtVND, timeAgo } from "../../lib/format";
 import { CATEGORY_ICON, FALLBACK_ICON, Icon, type IconName } from "../../components/Icons";
@@ -75,13 +75,6 @@ function Dashboard() {
     { i: "wallet" as IconName, l: `Phí nền tảng (${feeRate}%)`, v: fmtK(Math.round((revenue * feeRate) / 100)), s: `từ ${fmtK(revenue)} giá trị hoàn thành`, cls: "bg-good-100 text-good-700" },
   ];
 
-  // Thống kê thanh toán qua cổng (Giai đoạn 4) — chỉ có ở chế độ API
-  const [pay, setPay] = useState<{ count: number; gross: number; platformFee: number; workerPayout: number } | null>(null);
-  useEffect(() => {
-    if (!isApiMode()) return;
-    remote.adminPaymentStats().then(setPay).catch(() => {});
-  }, []);
-
   return (
     <div className="anim-fadeUp space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
@@ -105,22 +98,8 @@ function Dashboard() {
         ))}
       </div>
 
-      {/* Doanh thu qua cổng thanh toán (Giai đoạn 4) */}
-      {pay && (
-        <div className="anim-fadeUp grid gap-3.5 rounded-xl border border-good-500/30 bg-good-100/40 p-4 sm:grid-cols-4">
-          {[
-            { l: "Giao dịch thành công", v: String(pay.count) },
-            { l: "Tổng giá trị", v: fmtVND(pay.gross) },
-            { l: "Phí nền tảng (10%)", v: fmtVND(pay.platformFee) },
-            { l: "Chi trả cho thợ", v: fmtVND(pay.workerPayout) },
-          ].map((x) => (
-            <div key={x.l}>
-              <p className="font-display text-[19px] font-extrabold text-good-700">{x.v}</p>
-              <p className="text-[11.5px] font-semibold text-good-700/80">{x.l}</p>
-            </div>
-          ))}
-        </div>
-      )}
+      {/* Thống kê doanh thu (Giai đoạn mở rộng) */}
+      <RevenuePanel db={db} />
 
       <div className="grid gap-5 lg:grid-cols-[1.5fr_1fr]">
         <div className="rounded-xl border border-line bg-card p-5">
@@ -680,6 +659,203 @@ function AdminSettings() {
             <p className="mt-2 text-[12.5px] leading-relaxed text-ink-400">
               Các marketplace dịch vụ gia đình thường thu <b className="text-paper">8–15%</b>. Mức thấp giúp hút thợ mới, mức cao phù hợp khi nền tảng đã có thương hiệu và lượng việc ổn định.
             </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================= THỐNG KÊ DOANH THU (Giai đoạn mở rộng) ================= */
+
+/** Chế độ demo: tính toán trực tiếp từ dữ liệu cục bộ */
+function localRevenue(db: ReturnType<typeof useDB>): RevenueData {
+  const feeRate = getPlatformFee();
+  const price = (j: (typeof db.jobs)[number]) =>
+    db.quotes.find((q) => q.jobId === j.id && q.status === "accepted")?.price ?? j.budget;
+  const done = db.jobs.filter((j) => ["done", "reviewed"].includes(j.status));
+  const pays = db.payments.filter((p) => p.status === "success");
+  const gmv = done.reduce((s, j) => s + price(j), 0);
+  const collected = pays.reduce((s, p) => s + p.amount, 0);
+  const fee = Math.round((collected * feeRate) / 100);
+
+  const byDay = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (13 - i));
+    const from = new Date(d).setHours(0, 0, 0, 0);
+    const to = from + 86400_000;
+    return {
+      label: `${d.getDate()}/${d.getMonth() + 1}`,
+      gmv: done.filter((j) => j.doneAt && j.doneAt >= from && j.doneAt < to).reduce((s, j) => s + price(j), 0),
+      collected: pays.filter((p) => p.paidAt && p.paidAt >= from && p.paidAt < to).reduce((s, p) => s + p.amount, 0),
+    };
+  });
+
+  const catMap = new Map<string, { name: string; color: string; jobs: number; gmv: number }>();
+  done.forEach((j) => {
+    const c = db.categories.find((x) => x.id === j.categoryId);
+    const e = catMap.get(j.categoryId) ?? { name: c?.name ?? "—", color: c?.color ?? "#f4581c", jobs: 0, gmv: 0 };
+    e.jobs += 1; e.gmv += price(j);
+    catMap.set(j.categoryId, e);
+  });
+  const wMap = new Map<string, { name: string; jobs: number; gmv: number }>();
+  done.forEach((j) => {
+    if (!j.workerId) return;
+    const w = db.workers.find((x) => x.id === j.workerId);
+    const e = wMap.get(j.workerId) ?? { name: w?.name ?? "Thợ", jobs: 0, gmv: 0 };
+    e.jobs += 1; e.gmv += price(j);
+    wMap.set(j.workerId, e);
+  });
+
+  return {
+    feeRate, gmv, collected, fee, payout: collected - fee,
+    txCount: pays.length, avgJob: done.length ? Math.round(gmv / done.length) : 0,
+    byDay,
+    byCategory: [...catMap.values()].sort((a, b) => b.gmv - a.gmv),
+    topWorkers: [...wMap.values()].sort((a, b) => b.gmv - a.gmv).slice(0, 5),
+    recent: pays.slice(0, 8).map((p) => {
+      const j = db.jobs.find((x) => x.id === p.jobId);
+      const u = db.users.find((x) => x.id === p.customerId);
+      return { id: p.id, code: j?.code ?? "—", customer: u?.name ?? "—", amount: p.amount, createdAt: p.paidAt ?? p.createdAt };
+    }),
+  };
+}
+
+/** Biểu đồ cột kép: GMV (việc hoàn thành) vs thực thu qua cổng */
+function GroupedBars({ data, height = 160 }: { data: { label: string; gmv: number; collected: number }[]; height?: number }) {
+  const max = Math.max(1, ...data.map((d) => Math.max(d.gmv, d.collected)));
+  return (
+    <div>
+      <div className="flex items-end gap-1.5" style={{ height }}>
+        {data.map((d, i) => (
+          <div key={i} className="group relative flex flex-1 items-end justify-center gap-[3px]">
+            <div className="w-1/2 rounded-t-[4px] bg-safety-500/80 transition group-hover:opacity-75" style={{ height: Math.max(3, (d.gmv / max) * (height - 24)) }} />
+            <div className="w-1/2 rounded-t-[4px] bg-good-500 transition group-hover:opacity-75" style={{ height: Math.max(3, (d.collected / max) * (height - 24)) }} />
+            <span className="pointer-events-none absolute -top-9 left-1/2 z-10 -translate-x-1/2 whitespace-nowrap rounded-md bg-ink-900 px-2 py-1 font-mono text-[10.5px] font-semibold text-paper opacity-0 transition group-hover:opacity-100">
+              {fmtK(d.gmv)} · {fmtK(d.collected)}
+            </span>
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex gap-1.5">
+        {data.map((d, i) => (
+          <span key={i} className="flex-1 truncate text-center text-[10px] font-medium text-mute">{d.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function RevenuePanel({ db }: { db: ReturnType<typeof useDB> }) {
+  const [data, setData] = useState<RevenueData | null>(null);
+  const [err, setErr] = useState("");
+  const api = isApiMode();
+
+  useEffect(() => {
+    if (api) {
+      remote.adminRevenue().then(setData).catch((e) => setErr(e instanceof Error ? e.message : "Không tải được số liệu."));
+    } else {
+      setData(localRevenue(db));
+    }
+  }, [api, db]);
+
+  if (err) {
+    return <div className="rounded-xl border border-danger-600/30 bg-danger-100/40 p-4 text-[13px] font-semibold text-danger-600">Không tải được thống kê doanh thu: {err}</div>;
+  }
+  if (!data) {
+    return <div className="flex h-40 items-center justify-center rounded-xl border border-line bg-card text-[13px] font-semibold text-mute">Đang tải số liệu doanh thu…</div>;
+  }
+
+  const kpis = [
+    { l: "Tổng giá trị việc (GMV)", v: fmtVND(data.gmv), c: "text-ink-900" },
+    { l: "Thực thu qua cổng", v: fmtVND(data.collected), c: "text-good-700" },
+    { l: `Phí nền tảng (${data.feeRate}%)`, v: fmtVND(data.fee), c: "text-safety-600" },
+    { l: "Chi trả cho thợ", v: fmtVND(data.payout), c: "text-ink-900" },
+    { l: "Giá trị TB / việc", v: fmtVND(data.avgJob), c: "text-ink-900" },
+  ];
+
+  return (
+    <div className="anim-fadeUp space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h3 className="font-display text-[19px] font-bold text-ink-900">Doanh thu & dòng tiền</h3>
+          <p className="text-[12.5px] text-mute">
+            {data.txCount} giao dịch thành công · phí nền tảng {data.feeRate}%{api ? " · dữ liệu thời gian thực" : " · dữ liệu demo"}
+          </p>
+        </div>
+        <div className="flex items-center gap-4 text-[11.5px] font-bold">
+          <span className="flex items-center gap-1.5 text-mute"><span className="h-2.5 w-2.5 rounded-sm bg-safety-500/80" /> Giá trị việc hoàn thành</span>
+          <span className="flex items-center gap-1.5 text-mute"><span className="h-2.5 w-2.5 rounded-sm bg-good-500" /> Thực thu qua cổng</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        {kpis.map((k) => (
+          <div key={k.l} className="rounded-xl border border-line bg-card p-3.5">
+            <p className={cls("font-display text-[19px] font-extrabold leading-tight", k.c)}>{k.v}</p>
+            <p className="mt-1 text-[11px] font-semibold text-mute">{k.l}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-xl border border-line bg-card p-5">
+        <h4 className="mb-3 text-[13.5px] font-bold text-ink-800">14 ngày gần nhất</h4>
+        <GroupedBars data={data.byDay} />
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="rounded-xl border border-line bg-card p-5 lg:col-span-1">
+          <h4 className="mb-3 text-[13.5px] font-bold text-ink-800">Theo danh mục</h4>
+          <div className="space-y-3">
+            {data.byCategory.map((c) => {
+              const max = Math.max(1, ...data.byCategory.map((x) => x.gmv));
+              return (
+                <div key={c.name}>
+                  <div className="mb-1 flex justify-between text-[12px] font-semibold">
+                    <span className="text-ink-800">{c.name} <span className="text-mute">({c.jobs})</span></span>
+                    <span className="font-mono text-mute">{fmtK(c.gmv)}</span>
+                  </div>
+                  <div className="h-2 overflow-hidden rounded-full bg-paper">
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${(c.gmv / max) * 100}%`, background: c.color }} />
+                  </div>
+                </div>
+              );
+            })}
+            {data.byCategory.length === 0 && <p className="text-[12.5px] text-mute">Chưa có việc hoàn thành.</p>}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-card p-5 lg:col-span-1">
+          <h4 className="mb-3 text-[13.5px] font-bold text-ink-800">Top thợ theo giá trị</h4>
+          <div className="space-y-2.5">
+            {data.topWorkers.map((w, i) => (
+              <div key={w.name + i} className="flex items-center gap-3">
+                <span className={cls("flex h-7 w-7 shrink-0 items-center justify-center rounded-lg font-display text-[12px] font-extrabold", i === 0 ? "bg-safety-500 text-white" : "bg-paper text-ink-700")}>{i + 1}</span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-bold text-ink-900">{w.name}</p>
+                  <p className="text-[11px] text-mute">{w.jobs} việc</p>
+                </div>
+                <span className="font-mono text-[12.5px] font-bold text-good-700">{fmtK(w.gmv)}</span>
+              </div>
+            ))}
+            {data.topWorkers.length === 0 && <p className="text-[12.5px] text-mute">Chưa có dữ liệu.</p>}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-line bg-card p-5 lg:col-span-1">
+          <h4 className="mb-3 text-[13.5px] font-bold text-ink-800">Giao dịch gần đây</h4>
+          <div className="space-y-2.5">
+            {data.recent.map((p) => (
+              <div key={p.id} className="flex items-center gap-3 border-b border-line/50 pb-2 last:border-0 last:pb-0">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-good-100 text-good-700"><Icon name="wallet" size={15} /></span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12.5px] font-bold text-ink-900">{p.code} · {p.customer}</p>
+                  <p className="text-[11px] text-mute">{timeAgo(p.createdAt)}</p>
+                </div>
+                <span className="font-mono text-[12.5px] font-bold text-good-700">+{fmtK(p.amount)}</span>
+              </div>
+            ))}
+            {data.recent.length === 0 && <p className="text-[12.5px] text-mute">Chưa có giao dịch nào.</p>}
           </div>
         </div>
       </div>

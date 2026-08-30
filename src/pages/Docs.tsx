@@ -105,6 +105,15 @@ const TABLES: Table[] = [
     ],
   },
   {
+    name: "Payment", desc: "Giao dịch thanh toán (1 việc — 1 giao dịch)",
+    cols: [
+      { n: "id", t: "cuid", k: "PK" }, { n: "jobId", t: "→ Job (duy nhất)", k: "UK" },
+      { n: "customerId", t: "→ User", k: "FK" }, { n: "amount", t: "int" },
+      { n: "method", t: "vnpay_qr | vnpay_card | cod" }, { n: "txnRef", t: "mã giao dịch" },
+      { n: "status", t: "pending | success | failed" }, { n: "createdAt / paidAt", t: "datetime" },
+    ],
+  },
+  {
     name: "Setting", desc: "Cấu hình nền tảng (phí %, hotline…)",
     cols: [{ n: "key", t: "'platform_fee'…", k: "PK" }, { n: "value", t: "text" }],
   },
@@ -204,7 +213,10 @@ const API_GROUPS: ApiGroup[] = [
       { m: "GET", p: "/payments/my", role: "Khách", d: "Lịch sử giao dịch của khách" },
       { m: "GET", p: "/payments/worker", role: "Thợ", d: "Giao dịch của các việc thợ được gán" },
       { m: "GET", p: "/payments/job/:jobId", role: "Người liên quan", d: "Trạng thái thanh toán của 1 việc" },
-      { m: "GET", p: "/admin/payments/stats", role: "Admin", d: "Tổng giá trị, phí 10%, chi trả thợ" },
+      { m: "GET", p: "/admin/payments/stats", role: "Admin", d: "Tổng giá trị, phí, chi trả thợ" },
+      { m: "GET", p: "/admin/stats/revenue", role: "Admin", d: "Doanh thu 14 ngày, theo danh mục, top thợ, giao dịch gần đây" },
+      { m: "GET", p: "/settings/platform-fee", role: "Public", d: "Phí nền tảng hiện tại (cho màn hình thanh toán)" },
+      { m: "PATCH", p: "/admin/settings", role: "Admin", d: "Cập nhật phí nền tảng (0–50%)" },
     ],
   },
   {
@@ -433,7 +445,7 @@ export default function Docs() {
                 { t: "API Gateway — NestJS (TypeScript)", d: "Global prefix /api/v1 · ValidationPipe (class-validator) · CORS · JWT Guard + RBAC (@Roles) gắn toàn cục qua APP_GUARD", icon: "layers" as IconName, tone: "#dd9a2b" },
                 { t: "Realtime — Socket.io namespace /chat", d: "Xác thực JWT ở handshake · kiểm tra quyền tham gia · room theo từng việc job:{id}", icon: "chat" as IconName, tone: "#38a3c0" },
                 { t: "ORM — Prisma Client", d: "Schema-first · transaction cho các thao tác nhiều bảng (chốt báo giá, đánh giá, đặt lịch)", icon: "code" as IconName, tone: "#12936f" },
-                { t: "PostgreSQL 16", d: "13 bảng + enum + index theo đường truy vấn nóng (feed việc, thông báo chưa đọc, báo giá)", icon: "database" as IconName, tone: "#2e527c" },
+                { t: "PostgreSQL 16", d: "14 bảng + enum + index theo đường truy vấn nóng (feed việc, thông báo chưa đọc, báo giá)", icon: "database" as IconName, tone: "#2e527c" },
               ].map((l, i) => (
                 <div key={l.t} className="anim-fadeUp relative flex items-start gap-4 rounded-xl border border-white/10 bg-ink-900/70 p-5 transition hover:border-white/25" style={{ animationDelay: `${i * 70}ms` }}>
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: `${l.tone}26`, color: l.tone }}><Icon name={l.icon} size={20} /></span>

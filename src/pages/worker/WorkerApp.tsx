@@ -3,7 +3,7 @@ import { Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { DashShell, type NavItem } from "../../components/DashShell";
 import AccountSettings from "../AccountSettings";
 import { useDB, useSession } from "../../lib/store";
-import { completeJob, sendQuote, startJob, toggleAvailable, updateWorkerProfile } from "../../lib/api";
+import { completeJob, getFeeBreakdown, sendQuote, startJob, toggleAvailable, updateWorkerProfile } from "../../lib/api";
 import { APPROVAL, cls, fmtK, fmtVND, hourShort, timeAgo } from "../../lib/format";
 import { CATEGORY_ICON, FALLBACK_ICON, Icon, type IconName } from "../../components/Icons";
 import { Badge, Bars, Button, EmptyState, Field, JobPill, Modal, Stars, Tabs, useToast } from "../../components/ui";
@@ -80,6 +80,7 @@ function Overview() {
   const myJobs = db.jobs.filter((j) => j.workerId === w.id);
   const active = myJobs.filter((j) => ["assigned", "in_progress"].includes(j.status));
   const { total, done14 } = workerEarnings(db, w.id);
+  const bd = getFeeBreakdown(total);
   const newJobs = db.jobs.filter((j) => j.categoryId === w.categoryId && j.status === "open").slice(0, 3);
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date();
@@ -119,7 +120,7 @@ function Overview() {
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         {[
           { icon: "briefcase" as IconName, label: "Việc đang làm", value: String(active.length), cls: "bg-safety-100 text-safety-600" },
-          { icon: "wallet" as IconName, label: "Thu nhập tích lũy", value: fmtK(total), cls: "bg-good-100 text-good-700" },
+          { icon: "wallet" as IconName, label: `Thực nhận (sau ${bd.rate}% phí)`, value: fmtK(bd.net), cls: "bg-good-100 text-good-700" },
           { icon: "star" as IconName, label: "Đánh giá", value: w.rating ? w.rating.toFixed(1) : "—", cls: "bg-warn-100 text-warn-600" },
           { icon: "check" as IconName, label: "Việc hoàn thành", value: String(w.jobsDone), cls: "bg-ink-800/10 text-ink-700" },
         ].map((s, i) => (
@@ -461,7 +462,7 @@ function WorkerJobDetail() {
           {job.urgency === "urgent" && <Badge className="bg-safety-500 text-white">Khẩn cấp</Badge>}
           {paid && (
             <Badge className="bg-good-100 text-good-700">
-              <Icon name="check" size={12} /> Khách đã thanh toán {fmtVND(payment!.amount)}
+              <Icon name="check" size={12} /> Khách đã thanh toán {fmtVND(payment!.amount)} · bạn thực nhận {fmtVND(getFeeBreakdown(payment!.amount).net)}
             </Badge>
           )}
           {payment && payment.status === "pending" && <Badge className="bg-warn-100 text-warn-600">Đang chờ khách thanh toán</Badge>}
@@ -481,6 +482,21 @@ function WorkerJobDetail() {
             </div>
           ))}
         </div>
+        {/* Thực nhận của thợ (giá chốt − phí nền tảng) */}
+        {(() => {
+          const b = getFeeBreakdown(price);
+          return (
+            <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5 rounded-xl border border-good-500/40 bg-good-100/50 px-4 py-3">
+              <span className="flex items-center gap-2 text-[13px] font-bold text-good-700">
+                <Icon name="wallet" size={15} /> Bạn thực nhận:
+                <b className="font-display text-[17px] text-good-700">{fmtVND(b.net)}</b>
+              </span>
+              <span className="text-[12.5px] text-mute">
+                Giá chốt {fmtVND(price)} − phí nền tảng {b.rate}% ({fmtVND(b.fee)})
+              </span>
+            </div>
+          );
+        })()}
         <div className="mt-5 flex flex-wrap gap-2 border-t border-line pt-4">
           {job.status === "assigned" && (
             <Button icon="wrench" loading={busy} onClick={() => act(() => startJob(job.id), "Đã bắt đầu — khách đã được thông báo.")}>Bắt đầu thi công</Button>
@@ -533,6 +549,7 @@ function Stats() {
     return { label: `${d.getDate()}/${d.getMonth() + 1}`, value: val };
   });
   const { total } = workerEarnings(db, w.id);
+  const bd2 = getFeeBreakdown(total);
   const reviews = db.reviews.filter((r) => r.workerId === w.id);
   const dist = [5, 4, 3, 2, 1].map((s) => ({ s, n: reviews.filter((r) => Math.round(r.rating) === s).length }));
   const maxDist = Math.max(1, ...dist.map((x) => x.n));
@@ -547,18 +564,18 @@ function Stats() {
       </div>
       <div className="grid grid-cols-2 gap-3.5 lg:grid-cols-4">
         {[
-          { l: "Tổng doanh thu", v: fmtVND(total), i: "wallet" as IconName },
+          { l: "Tổng doanh thu (trước phí)", v: fmtVND(total), i: "chart" as IconName, note: collected > 0 ? `Đã thu online ${fmtK(collected)}` : undefined },
+          { l: `Thực nhận (sau ${bd2.rate}% phí)`, v: fmtVND(bd2.net), i: "wallet" as IconName, hl: true, note: `Phí nền tảng −${fmtK(bd2.fee)}` },
           { l: "Việc hoàn thành", v: String(myJobs.length), i: "check" as IconName },
-          { l: "Bình quân / việc", v: myJobs.length ? fmtK(total / myJobs.length) : "—", i: "chart" as IconName },
           { l: "Đánh giá trung bình", v: w.rating ? w.rating.toFixed(1) + "★" : "—", i: "star" as IconName },
         ].map((s) => (
-          <div key={s.l} className="rounded-xl border border-line bg-card p-4">
-            <span className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-safety-100 text-safety-600"><Icon name={s.i} size={17} /></span>
-            <p className="font-display text-[21px] font-extrabold text-ink-900">{s.v}</p>
+          <div key={s.l} className={cls("rounded-xl border p-4", s.hl ? "border-good-500/50 bg-good-100/40" : "border-line bg-card")}>
+            <span className={cls("mb-2 flex h-9 w-9 items-center justify-center rounded-lg", s.hl ? "bg-good-500 text-white" : "bg-safety-100 text-safety-600")}><Icon name={s.i} size={17} /></span>
+            <p className={cls("font-display text-[21px] font-extrabold", s.hl ? "text-good-700" : "text-ink-900")}>{s.v}</p>
             <p className="text-[12px] font-semibold text-mute">{s.l}</p>
-            {s.l === "Tổng doanh thu" && collected > 0 && (
-              <p className="mt-1.5 flex items-center gap-1 rounded-md bg-good-100 px-2 py-1 text-[11px] font-bold text-good-700">
-                <Icon name="check" size={11} /> Đã thu online {fmtK(collected)}
+            {s.note && (
+              <p className={cls("mt-1.5 flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-bold", s.hl ? "bg-warn-100 text-warn-600" : "bg-good-100 text-good-700")}>
+                <Icon name={s.hl ? "wallet" : "check"} size={11} /> {s.note}
               </p>
             )}
           </div>

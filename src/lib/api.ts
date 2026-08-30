@@ -479,6 +479,13 @@ export async function paymentForJob(jobId: string): Promise<Payment | null> {
 /* ================= TÀI KHOẢN & CÀI ĐẶT NỀN TẢNG ================= */
 
 /** Phí nền tảng (%) — đọc đồng bộ từ store (cả 2 chế độ) */
+/** Tách một khoản tiền thành: phí nền tảng + phần thực nhận của thợ */
+export function getFeeBreakdown(amount: number): { rate: number; fee: number; net: number } {
+  const rate = getPlatformFee();
+  const fee = Math.round((amount * rate) / 100);
+  return { rate, fee, net: amount - fee };
+}
+
 export function getPlatformFee(): number {
   const f = getDB().settings?.platformFee;
   return typeof f === "number" && f >= 0 ? f : 10;

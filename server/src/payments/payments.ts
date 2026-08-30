@@ -27,8 +27,8 @@ export class PaymentsController {
     });
     if (!job) throw new BizError("Không tìm thấy công việc.", 404);
     if (job.customerId !== u.sub) throw new BizError("Bạn không phải khách của việc này.", 403);
-    if (!([JobStatus.ASSIGNED, JobStatus.IN_PROGRESS, JobStatus.DONE] as JobStatus[]).includes(job.status))
-      throw new BizError("Việc chưa ở trạng thái có thể thanh toán.");
+    if (!([JobStatus.DONE, JobStatus.REVIEWED] as JobStatus[]).includes(job.status))
+      throw new BizError("Chỉ thanh toán được sau khi thợ hoàn thành việc.");
     if (job.payment?.status === PaymentStatus.SUCCESS) throw new BizError("Việc này đã được thanh toán.");
 
     const amount = job.quotes[0]?.price ?? job.budget;

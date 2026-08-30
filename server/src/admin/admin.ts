@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Module, Param, Patch, Post, Put, Query } from "@nestjs/common";
 import { IsEnum, IsInt, IsNotEmpty, IsOptional, IsString, Min } from "class-validator";
-import { Approval, JobStatus, Role } from "@prisma/client";
+import { Approval, JobStatus, PaymentStatus, QuoteStatus, Role } from "@prisma/client";
 import { PrismaService } from "../prisma.service";
 import { BizError, Roles } from "../common";
 
@@ -49,6 +49,75 @@ export class AdminController {
       userByRole: users, activeWorkers: workers, pendingWorkers: pending, flaggedReviews: flagged,
       totalJobs: jobs.length, openJobs: jobs.filter((j) => j.status === JobStatus.OPEN).length,
       revenue, platformFee: Math.round(revenue * 0.1), jobsByDay: days,
+    };
+  }
+
+  /* ---------- Thống kê doanh thu chi tiết ---------- */
+  @Get("stats/revenue")
+  async revenue() {
+    const feeRow = await this.prisma.setting.findUnique({ where: { key: "platform_fee" } });
+    const feeRate = feeRow ? Number(feeRow.value) : 10;
+
+    const jobs = await this.prisma.job.findMany({
+      where: { status: { in: [JobStatus.DONE, JobStatus.REVIEWED] } },
+      include: {
+        category: true,
+        worker: { include: { user: { select: { name: true } } } },
+        quotes: { where: { status: QuoteStatus.ACCEPTED }, take: 1 },
+      },
+    });
+    const payments = await this.prisma.payment.findMany({
+      where: { status: PaymentStatus.SUCCESS },
+      include: { job: { select: { code: true, customer: { select: { name: true } } } } },
+      orderBy: { paidAt: "desc" },
+    });
+
+    const price = (j: (typeof jobs)[number]) => j.quotes[0]?.price ?? j.budget;
+    const gmv = jobs.reduce((s, j) => s + price(j), 0);
+    const collected = payments.reduce((s, p) => s + p.amount, 0);
+    const fee = Math.round((collected * feeRate) / 100);
+
+    // Chuỗi 14 ngày: GMV (việc hoàn thành) vs thực thu qua cổng
+    const byDay = Array.from({ length: 14 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (13 - i));
+      const from = new Date(d).setHours(0, 0, 0, 0);
+      const to = from + 86400_000;
+      const g = jobs.filter((j) => j.doneAt && +j.doneAt >= from && +j.doneAt < to).reduce((s, j) => s + price(j), 0);
+      const c = payments.filter((p) => p.paidAt && +p.paidAt >= from && +p.paidAt < to).reduce((s, p) => s + p.amount, 0);
+      return { label: `${d.getDate()}/${d.getMonth() + 1}`, gmv: g, collected: c };
+    });
+
+    // Theo danh mục
+    const byCatMap = new Map<string, { name: string; color: string; jobs: number; gmv: number }>();
+    jobs.forEach((j) => {
+      const e = byCatMap.get(j.categoryId) ?? { name: j.category.name, color: j.category.color, jobs: 0, gmv: 0 };
+      e.jobs += 1;
+      e.gmv += price(j);
+      byCatMap.set(j.categoryId, e);
+    });
+
+    // Top thợ theo giá trị việc
+    const wMap = new Map<string, { name: string; jobs: number; gmv: number }>();
+    jobs.forEach((j) => {
+      if (!j.worker) return;
+      const e = wMap.get(j.worker.id) ?? { name: j.worker.user.name, jobs: 0, gmv: 0 };
+      e.jobs += 1;
+      e.gmv += price(j);
+      wMap.set(j.worker.id, e);
+    });
+
+    return {
+      feeRate, gmv, collected, fee, payout: collected - fee,
+      txCount: payments.length,
+      avgJob: jobs.length ? Math.round(gmv / jobs.length) : 0,
+      byDay,
+      byCategory: [...byCatMap.values()].sort((a, b) => b.gmv - a.gmv),
+      topWorkers: [...wMap.values()].sort((a, b) => b.gmv - a.gmv).slice(0, 5),
+      recent: payments.slice(0, 8).map((p) => ({
+        id: p.id, code: p.job?.code ?? "—", customer: p.job?.customer?.name ?? "—",
+        amount: p.amount, createdAt: +(p.paidAt ?? p.createdAt),
+      })),
     };
   }
 

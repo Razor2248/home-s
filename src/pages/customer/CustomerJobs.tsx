@@ -133,8 +133,10 @@ export function CustomerJobDetail() {
   const cancellable = ["open", "assigned"].includes(job.status);
   const accepted = quotes.find((q) => q.status === "accepted");
   const amount = accepted?.price ?? job.budget;
-  const payable = worker && ["assigned", "in_progress", "done"].includes(job.status) && payment?.status !== "success";
+  // Chỉ thanh toán được SAU KHI thợ hoàn thành (done) — hoặc đã đánh giá (reviewed) mà chưa trả tiền
   const paid = payment?.status === "success";
+  const payable = worker && ["done", "reviewed"].includes(job.status) && !paid;
+  const payLocked = !!worker && !paid && ["assigned", "in_progress"].includes(job.status);
 
   const doAccept = async (quoteId: string) => {
     setBusyQuote(quoteId);
@@ -279,12 +281,14 @@ export function CustomerJobDetail() {
                   </span>
                   <div>
                     <p className="text-[14.5px] font-bold text-ink-900">
-                      {paid ? "Đã thanh toán" : payment?.status === "pending" ? "Chờ xác nhận thanh toán" : "Thanh toán dịch vụ"}
+                      {paid ? "Đã thanh toán" : payment?.status === "pending" ? "Chờ xác nhận thanh toán" : payLocked ? "Thanh toán đang khóa" : "Thanh toán dịch vụ"}
                     </p>
                     <p className="text-[12.5px] text-mute">
                       {paid
                         ? `Mã ${payment?.txnRef} · ${payment?.paidAt ? timeAgo(payment.paidAt) : ""}`
-                        : `Giá chốt với ${worker.name}: ${fmtVND(amount)}`}
+                        : payLocked
+                          ? "Sẽ mở ngay khi thợ bấm hoàn thành việc"
+                          : `Giá chốt với ${worker.name}: ${fmtVND(amount)}`}
                     </p>
                   </div>
                 </div>
@@ -292,8 +296,18 @@ export function CustomerJobDetail() {
                   <Button icon="lock" onClick={() => setPayOpen(true)}>Thanh toán ngay</Button>
                 ) : paid ? (
                   <Badge className="bg-good-500 text-white"><Icon name="shield" size={12} /> Giao dịch an toàn</Badge>
+                ) : payLocked ? (
+                  <span className="flex items-center gap-1.5 rounded-lg border border-line bg-paper px-3 py-2 text-[12.5px] font-bold text-mute">
+                    <Icon name="lock" size={14} /> Chờ hoàn thành
+                  </span>
                 ) : null}
               </div>
+              {payLocked && (
+                <p className="mt-3 flex items-center gap-2 border-t border-line/70 pt-3 text-[12.5px] text-mute">
+                  <Icon name="clock" size={14} className="text-warn-600" />
+                  Để bảo vệ bạn, tiền chỉ thanh toán sau khi <b className="text-ink-800">{worker.name}</b> hoàn thành — lúc đó hãy nghiệm thu rồi trả tiền.
+                </p>
+              )}
             </div>
           )}
 

@@ -17,7 +17,7 @@ createdb home_services
 ```bash
 cp .env.example .env          # chỉnh lại nếu khác cấu hình
 npm install
-npx prisma migrate dev        # tạo 13 bảng theo schema.prisma
+npx prisma migrate dev        # tạo 14 bảng theo schema.prisma
 npm run seed                  # nạp dữ liệu demo (khớp ID với frontend)
 npm run dev                   # chạy tại http://localhost:3001
 ```

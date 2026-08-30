@@ -179,7 +179,23 @@ export const remote = {
   adminReviews: () => http.get<Any[]>("/admin/reviews"),
   resolveReview: (id: string, action: "keep" | "hide") => http.post(`/admin/reviews/${id}/resolve`, { action }),
   adminPaymentStats: () => http.get<{ count: number; gross: number; platformFee: number; workerPayout: number }>("/admin/payments/stats"),
+  adminRevenue: () => http.get<RevenueData>("/admin/stats/revenue"),
 };
+
+/* ================= dữ liệu doanh thu (Giai đoạn mở rộng) ================= */
+export interface RevenueData {
+  feeRate: number;
+  gmv: number;
+  collected: number;
+  fee: number;
+  payout: number;
+  txCount: number;
+  avgJob: number;
+  byDay: { label: string; gmv: number; collected: number }[];
+  byCategory: { name: string; color: string; jobs: number; gmv: number }[];
+  topWorkers: { name: string; jobs: number; gmv: number }[];
+  recent: { id: string; code: string; customer: string; amount: number; createdAt: number }[];
+}
 
 /* ================= snapshot theo vai trò ================= */
 const dedupe = <T extends { id: string }>(xs: T[]) => {
