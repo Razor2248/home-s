@@ -17,7 +17,7 @@ createdb home_services
 ```bash
 cp .env.example .env          # chỉnh lại nếu khác cấu hình
 npm install
-npx prisma migrate dev        # tạo 14 bảng theo schema.prisma
+npx prisma migrate dev        # tạo 16 bảng theo schema.prisma
 npm run seed                  # nạp dữ liệu demo (khớp ID với frontend)
 npm run dev                   # chạy tại http://localhost:3001
 ```
@@ -61,7 +61,7 @@ Việc kết nối đã hoàn tất ở Giai đoạn 3: `src/lib/api.ts` tự đ
 ```
 server/
 ├── prisma/
-│   ├── schema.prisma     # ERD: 14 bảng + enum + quan hệ + index
+│   ├── schema.prisma     # ERD: 16 bảng + enum + quan hệ + index
 │   └── seed.ts           # Dữ liệu demo (ID khớp frontend)
 └── src/
     ├── main.ts           # Bootstrap, CORS, /api/v1

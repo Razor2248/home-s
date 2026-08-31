@@ -117,6 +117,21 @@ const TABLES: Table[] = [
     name: "Setting", desc: "Cấu hình nền tảng (phí %, hotline…)",
     cols: [{ n: "key", t: "'platform_fee'…", k: "PK" }, { n: "value", t: "text" }],
   },
+  {
+    name: "CategoryChangeRequest", desc: "Thợ yêu cầu đổi danh mục nghề — cần admin duyệt",
+    cols: [
+      { n: "id", t: "cuid", k: "PK" }, { n: "workerId", t: "→ WorkerProfile", k: "FK" },
+      { n: "fromCategoryId / toCategoryId", t: "→ Category" }, { n: "note", t: "text (lý do)" },
+      { n: "status", t: "PENDING | APPROVED | REJECTED", k: "IDX" }, { n: "rejectReason", t: "text?" }, { n: "createdAt", t: "datetime" },
+    ],
+  },
+  {
+    name: "PasswordReset", desc: "Mã đặt lại mật khẩu — OTP 6 số, hết hạn 10 phút",
+    cols: [
+      { n: "id", t: "cuid", k: "PK" }, { n: "userId", t: "→ User", k: "FK" }, { n: "code", t: "6 số" },
+      { n: "expiresAt", t: "datetime" }, { n: "used", t: "bool" }, { n: "createdAt", t: "datetime" },
+    ],
+  },
 ];
 
 const RELATIONS = [
@@ -142,6 +157,8 @@ const API_GROUPS: ApiGroup[] = [
       { m: "POST", p: "/auth/register/worker", role: "Public", d: "Thợ đăng ký — tự sinh hồ sơ PENDING chờ duyệt" },
       { m: "POST", p: "/auth/refresh", role: "Public", d: "Đổi access token mới bằng refresh token" },
       { m: "GET", p: "/auth/me", role: "Mọi vai trò", d: "Thông tin phiên hiện tại + hồ sơ thợ (nếu có)" },
+      { m: "POST", p: "/auth/forgot-password", role: "Public", d: "Gửi mã OTP 6 số (sandbox trả mã ngay, hết hạn 10 phút)" },
+      { m: "POST", p: "/auth/reset-password", role: "Public", d: "Đổi mật khẩu mới bằng email + mã OTP" },
     ],
   },
   {
@@ -161,6 +178,8 @@ const API_GROUPS: ApiGroup[] = [
       { m: "GET", p: "/workers/me/profile", role: "Thợ", d: "Hồ sơ của chính mình" },
       { m: "PATCH", p: "/workers/me", role: "Thợ", d: "Sửa giới thiệu, giá khởi điểm, đồng bộ bảng giá" },
       { m: "PATCH", p: "/workers/me/available", role: "Thợ", d: "Bật / tắt nhận việc" },
+      { m: "GET", p: "/workers/me/category-changes", role: "Thợ", d: "Các yêu cầu đổi danh mục nghề của mình" },
+      { m: "POST", p: "/workers/me/category-changes", role: "Thợ", d: "Yêu cầu đổi danh mục (chặn khi đang chờ duyệt) → admin xét" },
       { m: "PUT", p: "/workers/:id/favorite", role: "Khách", d: "Lưu thợ yêu thích" },
       { m: "DELETE", p: "/workers/:id/favorite", role: "Khách", d: "Bỏ yêu thích" },
       { m: "GET", p: "/workers/favorites/list", role: "Khách", d: "Danh sách thợ đã lưu" },
@@ -230,6 +249,9 @@ const API_GROUPS: ApiGroup[] = [
       { m: "PATCH", p: "/admin/users/:id/block", role: "Admin", d: "Khóa / mở khóa (chặn đăng nhập)" },
       { m: "GET", p: "/admin/reviews?flagged=true", role: "Admin", d: "Đánh giá bị báo cáo" },
       { m: "POST", p: "/admin/reviews/:id/resolve", role: "Admin", d: "Giữ hoặc ẩn đánh giá vi phạm" },
+      { m: "GET", p: "/admin/category-changes?status=", role: "Admin", d: "Yêu cầu đổi danh mục nghề (?status=pending)" },
+      { m: "POST", p: "/admin/category-changes/:id/approve", role: "Admin", d: "Duyệt → chuyển categoryId của thợ trong transaction" },
+      { m: "POST", p: "/admin/category-changes/:id/reject", role: "Admin", d: "Từ chối kèm lý do" },
     ],
   },
 ];
@@ -445,7 +467,7 @@ export default function Docs() {
                 { t: "API Gateway — NestJS (TypeScript)", d: "Global prefix /api/v1 · ValidationPipe (class-validator) · CORS · JWT Guard + RBAC (@Roles) gắn toàn cục qua APP_GUARD", icon: "layers" as IconName, tone: "#dd9a2b" },
                 { t: "Realtime — Socket.io namespace /chat", d: "Xác thực JWT ở handshake · kiểm tra quyền tham gia · room theo từng việc job:{id}", icon: "chat" as IconName, tone: "#38a3c0" },
                 { t: "ORM — Prisma Client", d: "Schema-first · transaction cho các thao tác nhiều bảng (chốt báo giá, đánh giá, đặt lịch)", icon: "code" as IconName, tone: "#12936f" },
-                { t: "PostgreSQL 16", d: "14 bảng + enum + index theo đường truy vấn nóng (feed việc, thông báo chưa đọc, báo giá)", icon: "database" as IconName, tone: "#2e527c" },
+                { t: "PostgreSQL 16", d: "16 bảng + enum + index theo đường truy vấn nóng (feed việc, thông báo chưa đọc, báo giá)", icon: "database" as IconName, tone: "#2e527c" },
               ].map((l, i) => (
                 <div key={l.t} className="anim-fadeUp relative flex items-start gap-4 rounded-xl border border-white/10 bg-ink-900/70 p-5 transition hover:border-white/25" style={{ animationDelay: `${i * 70}ms` }}>
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: `${l.tone}26`, color: l.tone }}><Icon name={l.icon} size={20} /></span>

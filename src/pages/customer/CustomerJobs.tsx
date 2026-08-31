@@ -9,6 +9,20 @@ import { ChatPanel } from "../../components/Chat";
 import { PaymentModal } from "../../components/PaymentModal";
 import type { Job, Payment } from "../../lib/types";
 
+/** Pill trạng thái thông minh: việc "chờ báo giá" mà đã có thợ báo giá thì hiện "Có báo giá (n)" */
+function SmartPill({ job }: { job: Job }) {
+  const db = useDB();
+  const n = db.quotes.filter((q) => q.jobId === job.id).length;
+  if (job.status === "open" && n > 0) {
+    return (
+      <Badge className="bg-safety-100 text-safety-600">
+        <Icon name="wallet" size={11} /> Có báo giá ({n})
+      </Badge>
+    );
+  }
+  return <JobPill status={job.status} />;
+}
+
 /* ================= DANH SÁCH VIỆC ================= */
 export function MyJobs() {
   const db = useDB();
@@ -16,12 +30,14 @@ export function MyJobs() {
   const navigate = useNavigate();
   const [tab, setTab] = useState("all");
   const myJobs = db.jobs.filter((j) => j.customerId === me.id).sort((a, b) => b.createdAt - a.createdAt);
+  const hasQuotes = (id: string) => db.quotes.some((q) => q.jobId === id);
   const filtered = myJobs.filter((j) =>
     tab === "all" ? true
-      : tab === "open" ? j.status === "open"
-        : tab === "active" ? ["assigned", "in_progress"].includes(j.status)
-          : tab === "done" ? ["done", "reviewed"].includes(j.status)
-            : j.status === "cancelled",
+      : tab === "quotes" ? j.status === "open" && hasQuotes(j.id)
+        : tab === "open" ? j.status === "open"
+          : tab === "active" ? ["assigned", "in_progress"].includes(j.status)
+            : tab === "done" ? ["done", "reviewed"].includes(j.status)
+              : j.status === "cancelled",
   );
 
   return (
@@ -38,7 +54,8 @@ export function MyJobs() {
         onChange={setTab}
         items={[
           { id: "all", label: "Tất cả", count: myJobs.length },
-          { id: "open", label: "Chờ báo giá", count: myJobs.filter((j) => j.status === "open").length },
+          { id: "quotes", label: "Có báo giá", count: myJobs.filter((j) => j.status === "open" && hasQuotes(j.id)).length },
+          { id: "open", label: "Chờ báo giá", count: myJobs.filter((j) => j.status === "open" && !hasQuotes(j.id)).length },
           { id: "active", label: "Đang thực hiện", count: myJobs.filter((j) => ["assigned", "in_progress"].includes(j.status)).length },
           { id: "done", label: "Hoàn thành", count: myJobs.filter((j) => ["done", "reviewed"].includes(j.status)).length },
           { id: "cancelled", label: "Đã hủy", count: myJobs.filter((j) => j.status === "cancelled").length },
@@ -70,7 +87,7 @@ export function MyJobs() {
                   </p>
                 </div>
                 <div className="hidden text-right sm:block">
-                  <JobPill status={j.status} />
+                  <SmartPill job={j} />
                   <p className="mt-1 text-[11px] text-mute">{timeAgo(j.createdAt)}</p>
                 </div>
                 <Icon name="chevR" size={17} className="shrink-0 text-mute transition group-hover:translate-x-0.5 group-hover:text-safety-600" />
@@ -173,7 +190,7 @@ export function CustomerJobDetail() {
       <div className="rounded-xl border border-line bg-card p-6">
         <div className="flex flex-wrap items-center gap-2">
           <span className="rounded-md bg-ink-900 px-2.5 py-1 font-mono text-[12px] font-bold text-paper">{job.code}</span>
-          <JobPill status={job.status} />
+          <SmartPill job={job} />
           <Badge className={URGENCY[job.urgency].cls}>{URGENCY[job.urgency].label}</Badge>
           <span className="ml-auto text-[12.5px] text-mute">Đăng {timeAgo(job.createdAt)}</span>
         </div>

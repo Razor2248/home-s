@@ -9,7 +9,7 @@ import { isApiMode } from "../../lib/config";
 import { APPROVAL, cls, fmtK, fmtVND, timeAgo } from "../../lib/format";
 import { CATEGORY_ICON, FALLBACK_ICON, Icon, type IconName } from "../../components/Icons";
 import { Badge, Bars, Button, EmptyState, Field, JobPill, Modal, Stars, Tabs, useToast } from "../../components/ui";
-import type { Category, WorkerProfile } from "../../lib/types";
+import type { Category, CategoryChange, WorkerProfile } from "../../lib/types";
 
 export default function AdminApp() {
   const db = useDB();
@@ -745,6 +745,149 @@ function GroupedBars({ data, height = 160 }: { data: { label: string; gmv: numbe
           <span key={i} className="flex-1 truncate text-center text-[10px] font-medium text-mute">{d.label}</span>
         ))}
       </div>
+    </div>
+  );
+}
+
+/* ================= DUYỆT ĐỔI DANH MỤC NGHỀ ================= */
+function CategoryChanges() {
+  const db = useDB();
+  const { push } = useToast();
+  const [tab, setTab] = useState("pending");
+  const [rejecting, setRejecting] = useState<CategoryChange | null>(null);
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const pending = db.categoryChanges.filter((c) => c.status === "pending");
+  const processed = db.categoryChanges.filter((c) => c.status !== "pending");
+  const list = tab === "pending" ? pending : processed;
+
+  const catChip = (id: string) => {
+    const c = db.categories.find((x) => x.id === id);
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-lg border border-line bg-card px-2.5 py-1.5 text-[12.5px] font-bold text-ink-800">
+        <span className="h-2.5 w-2.5 rounded-sm" style={{ background: c?.color ?? "#999" }} />
+        {c?.name ?? id}
+      </span>
+    );
+  };
+
+  const doApprove = async (c: CategoryChange) => {
+    setBusy(true);
+    try {
+      await approveCategoryChange(c.id);
+      const to = db.categories.find((x) => x.id === c.toCategoryId)?.name ?? "mới";
+      push(`Đã duyệt — ${c.workerName} giờ nhận việc ở danh mục "${to}".`);
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Có lỗi xảy ra.", "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const doReject = async () => {
+    if (!rejecting) return;
+    if (reason.trim().length < 5) {
+      push("Ghi lý do từ chối rõ ràng một chút nhé.", "err");
+      return;
+    }
+    setBusy(true);
+    try {
+      await rejectCategoryChange(rejecting.id, reason.trim());
+      push(`Đã từ chối yêu cầu của ${rejecting.workerName}.`);
+      setRejecting(null);
+      setReason("");
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Có lỗi xảy ra.", "err");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="anim-fadeUp space-y-5">
+      <div>
+        <h2 className="font-display text-[24px] font-extrabold text-ink-900">Duyệt đổi danh mục nghề</h2>
+        <p className="mt-0.5 text-[13.5px] text-mute">
+          Thợ muốn nhận việc ở nghề khác cần gửi yêu cầu — duyệt xong, sàn việc của họ tự chuyển sang danh mục mới.
+        </p>
+      </div>
+
+      <Tabs
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: "pending", label: "Chờ duyệt", count: pending.length },
+          { id: "processed", label: "Đã xử lý", count: processed.length },
+        ]}
+      />
+
+      {list.length === 0 ? (
+        <EmptyState
+          icon="tag"
+          title={tab === "pending" ? "Không có yêu cầu chờ duyệt" : "Chưa xử lý yêu cầu nào"}
+          desc={tab === "pending" ? "Khi thợ gửi yêu cầu đổi danh mục, bạn sẽ thấy ở đây." : undefined}
+        />
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {list.map((c) => (
+            <div key={c.id} className="rounded-xl border border-line bg-card p-5 transition hover:border-ink-900/40">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[15px] font-bold text-ink-900">{c.workerName}</p>
+                <Badge className={APPROVAL[c.status].cls}>{APPROVAL[c.status].label}</Badge>
+              </div>
+              <p className="mt-1 text-[12px] text-mute">Gửi {timeAgo(c.createdAt)}</p>
+
+              <div className="mt-4 flex flex-wrap items-center gap-2.5 rounded-xl bg-paper/70 p-3.5">
+                {catChip(c.fromCategoryId)}
+                <Icon name="arrowR" size={17} className="text-mute" />
+                {catChip(c.toCategoryId)}
+              </div>
+
+              {c.note && (
+                <p className="mt-3 rounded-lg bg-paper/70 px-3.5 py-2.5 text-[13px] italic leading-relaxed text-ink-700">“{c.note}”</p>
+              )}
+              {c.status === "rejected" && c.rejectReason && (
+                <p className="mt-3 rounded-lg bg-danger-100/70 px-3.5 py-2 text-[12.5px] font-semibold text-danger-600">
+                  Lý do từ chối: {c.rejectReason}
+                </p>
+              )}
+
+              {c.status === "pending" && (
+                <div className="mt-4 flex gap-2 border-t border-line pt-3.5">
+                  <Button variant="good" size="sm" icon="check" loading={busy} onClick={() => doApprove(c)}>
+                    Duyệt & chuyển nghề
+                  </Button>
+                  <Button variant="outline" size="sm" icon="x" onClick={() => { setRejecting(c); setReason(""); }}>
+                    Từ chối
+                  </Button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <Modal
+        open={!!rejecting}
+        onClose={() => setRejecting(null)}
+        title={`Từ chối yêu cầu của ${rejecting?.workerName ?? ""}`}
+        sub="Lý do sẽ hiển thị với thợ để họ bổ sung hoặc gửi lại."
+      >
+        <Field label="Lý do từ chối">
+          <textarea
+            rows={3}
+            className="field-input"
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="VD: cần bổ sung chứng chỉ nghề tương ứng…"
+          />
+        </Field>
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="ghost" onClick={() => setRejecting(null)}>Hủy</Button>
+          <Button variant="danger" loading={busy} onClick={doReject}>Xác nhận từ chối</Button>
+        </div>
+      </Modal>
     </div>
   );
 }
