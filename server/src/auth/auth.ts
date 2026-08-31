@@ -29,6 +29,14 @@ class RegisterWorkerDto extends RegisterCustomerDto {
 class RefreshDto {
   @IsNotEmpty() refreshToken: string;
 }
+class ForgotDto {
+  @IsEmail({}, { message: "Email không hợp lệ." }) email: string;
+}
+class ResetDto {
+  @IsEmail({}, { message: "Email không hợp lệ." }) email: string;
+  @IsNotEmpty({ message: "Nhập mã xác thực." }) code: string;
+  @MinLength(6, { message: "Mật khẩu mới tối thiểu 6 ký tự." }) password: string;
+}
 
 /* ---------------- SERVICE ---------------- */
 @Injectable()
