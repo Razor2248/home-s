@@ -17,6 +17,7 @@ export const BASE_DISTRICTS = [
 ];
 
 export function seedDB(): DB {
+  const districtNames = ["Quận 1", "Quận 3", "Quận 7", "Quận 10", "Bình Thạnh", "Phú Nhuận", "Tân Bình", "Thủ Đức"];
   return {
     seq: 1009,
     settings: { platformFee: 10 },

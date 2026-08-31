@@ -44,6 +44,15 @@ export default function Login() {
     }
   }, []);
 
+  // Khu vực lấy từ danh sách admin quản lý (rơi về mặc định nếu store chưa kịp nạp)
+  const districts = activeDistricts.length ? activeDistricts.map((x) => x.name) : DISTRICTS;
+  useEffect(() => {
+    if (districts.length && !districts.includes(f.district)) {
+      setF((p) => ({ ...p, district: districts[0] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [districts.join("|")]);
+
   const switchMode = (m: DataMode) => {
     setDataModeState(m);
     setDataMode(m);
@@ -264,14 +273,14 @@ export default function Login() {
                 <div className="grid grid-cols-2 gap-3 rounded-xl bg-paper p-3.5">
                   <Field label="Nghề chính">
                     <select className="field-input" value={f.categoryId} onChange={(e) => setF({ ...f, categoryId: e.target.value })}>
-                      {["dien", "nuoc", "dieuhoa", "giupviec", "khoa", "son", "noithat", "vesinh"].map((c) => (
-                        <option key={c} value={c}>{c === "dien" ? "Sửa điện" : c === "nuoc" ? "Ống nước" : c === "dieuhoa" ? "Điều hòa" : c === "giupviec" ? "Giúp việc" : c === "khoa" ? "Sửa khóa" : c === "son" ? "Sơn sửa" : c === "noithat" ? "Nội thất" : "Vệ sinh"}</option>
+                      {db.categories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
                       ))}
                     </select>
                   </Field>
                   <Field label="Khu vực">
                     <select className="field-input" value={f.district} onChange={(e) => setF({ ...f, district: e.target.value })}>
-                      {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                      {districts.map((d) => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </Field>
                   <Field label="Kinh nghiệm (năm)">

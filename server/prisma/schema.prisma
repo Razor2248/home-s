@@ -310,6 +310,16 @@ model PasswordReset {
   @@index([userId])
 }
 
+/// Khu vực phục vụ — admin quản lý danh sách, dùng trong đăng ký thợ / đăng việc / tìm thợ
+model District {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  active Boolean @default(true)
+  order  Int     @default(0)
+
+  @@index([active])
+}
+
 /// Thanh toán (sandbox mô phỏng VNPay) — mỗi việc 1 giao dịch
 model Payment {
   id         String    @id @default(cuid())

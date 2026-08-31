@@ -13,6 +13,7 @@ class PriceItemDto {
 class UpdateWorkerDto {
   @IsOptional() @IsString() bio?: string;
   @IsOptional() @IsInt() @Min(10000) priceFrom?: number;
+  @IsOptional() @IsString() district?: string;
   @IsOptional() @IsArray() @ValidateNested({ each: true }) @Type(() => PriceItemDto) priceList?: PriceItemDto[];
 }
 
@@ -95,7 +96,7 @@ export class WorkersController {
       }
       return tx.workerProfile.update({
         where: { id: w.id },
-        data: { bio: d.bio, priceFrom: d.priceFrom },
+        data: { bio: d.bio, priceFrom: d.priceFrom, district: d.district },
         include: { priceList: { orderBy: { order: "asc" } }, category: true },
       });
     });

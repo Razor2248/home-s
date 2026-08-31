@@ -114,6 +114,13 @@ const TABLES: Table[] = [
     ],
   },
   {
+    name: "District", desc: "Khu vực phục vụ — admin quản lý, nuôi các form đăng ký/đăng việc/tìm thợ",
+    cols: [
+      { n: "id", t: "cuid", k: "PK" }, { n: "name", t: "text", k: "UK" },
+      { n: "active", t: "bool (ẩn khỏi form khi tắt)", k: "IDX" }, { n: "order", t: "int (thứ tự hiển thị)" },
+    ],
+  },
+  {
     name: "Setting", desc: "Cấu hình nền tảng (phí %, hotline…)",
     cols: [{ n: "key", t: "'platform_fee'…", k: "PK" }, { n: "value", t: "text" }],
   },
@@ -249,6 +256,11 @@ const API_GROUPS: ApiGroup[] = [
       { m: "PATCH", p: "/admin/users/:id/block", role: "Admin", d: "Khóa / mở khóa (chặn đăng nhập)" },
       { m: "GET", p: "/admin/reviews?flagged=true", role: "Admin", d: "Đánh giá bị báo cáo" },
       { m: "POST", p: "/admin/reviews/:id/resolve", role: "Admin", d: "Giữ hoặc ẩn đánh giá vi phạm" },
+      { m: "GET", p: "/districts", role: "Public", d: "Khu vực đang bật — cho form đăng ký thợ, đăng việc, tìm thợ" },
+      { m: "GET", p: "/admin/districts", role: "Admin", d: "Toàn bộ khu vực kèm số thợ / số việc đang dùng" },
+      { m: "POST", p: "/admin/districts", role: "Admin", d: "Thêm khu vực (chuẩn hóa tên, chặn trùng)" },
+      { m: "PATCH", p: "/admin/districts/:id", role: "Admin", d: "Đổi tên (cập nhật cả thợ & việc) hoặc bật/tắt" },
+      { m: "DELETE", p: "/admin/districts/:id", role: "Admin", d: "Xóa — chặn khi còn thợ/việc tham chiếu" },
       { m: "GET", p: "/admin/category-changes?status=", role: "Admin", d: "Yêu cầu đổi danh mục nghề (?status=pending)" },
       { m: "POST", p: "/admin/category-changes/:id/approve", role: "Admin", d: "Duyệt → chuyển categoryId của thợ trong transaction" },
       { m: "POST", p: "/admin/category-changes/:id/reject", role: "Admin", d: "Từ chối kèm lý do" },
@@ -467,7 +479,7 @@ export default function Docs() {
                 { t: "API Gateway — NestJS (TypeScript)", d: "Global prefix /api/v1 · ValidationPipe (class-validator) · CORS · JWT Guard + RBAC (@Roles) gắn toàn cục qua APP_GUARD", icon: "layers" as IconName, tone: "#dd9a2b" },
                 { t: "Realtime — Socket.io namespace /chat", d: "Xác thực JWT ở handshake · kiểm tra quyền tham gia · room theo từng việc job:{id}", icon: "chat" as IconName, tone: "#38a3c0" },
                 { t: "ORM — Prisma Client", d: "Schema-first · transaction cho các thao tác nhiều bảng (chốt báo giá, đánh giá, đặt lịch)", icon: "code" as IconName, tone: "#12936f" },
-                { t: "PostgreSQL 16", d: "16 bảng + enum + index theo đường truy vấn nóng (feed việc, thông báo chưa đọc, báo giá)", icon: "database" as IconName, tone: "#2e527c" },
+                { t: "PostgreSQL 16", d: "17 bảng + enum + index theo đường truy vấn nóng (feed việc, thông báo chưa đọc, báo giá)", icon: "database" as IconName, tone: "#2e527c" },
               ].map((l, i) => (
                 <div key={l.t} className="anim-fadeUp relative flex items-start gap-4 rounded-xl border border-white/10 bg-ink-900/70 p-5 transition hover:border-white/25" style={{ animationDelay: `${i * 70}ms` }}>
                   <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl" style={{ background: `${l.tone}26`, color: l.tone }}><Icon name={l.icon} size={20} /></span>

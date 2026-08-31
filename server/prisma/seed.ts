@@ -122,6 +122,16 @@ async function main() {
 
   await prisma.setting.upsert({ where: { key: "platform_fee" }, update: { value: "10" }, create: { key: "platform_fee", value: "10" } });
 
+  // ---------- Khu vực phục vụ ----------
+  const districts = ["Quận 1", "Quận 3", "Quận 7", "Quận 10", "Bình Thạnh", "Phú Nhuận", "Tân Bình", "Thủ Đức"];
+  for (let i = 0; i < districts.length; i++) {
+    await prisma.district.upsert({
+      where: { name: districts[i] },
+      update: { order: i },
+      create: { name: districts[i], active: true, order: i },
+    });
+  }
+
   // ---------- Yêu cầu đổi danh mục mẫu (chờ admin duyệt) ----------
   await prisma.categoryChangeRequest.upsert({
     where: { id: "ccr-01" },

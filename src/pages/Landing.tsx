@@ -28,6 +28,11 @@ export default function Landing() {
   const navigate = useNavigate();
   const [cat, setCat] = useState<string | null>(null);
   const [district, setDistrict] = useState("");
+  // Khu vực do admin quản lý (rơi về danh sách mặc định nếu store chưa nạp)
+  const landingDistricts = (() => {
+    const names = db.districts?.filter((d) => d.active).map((d) => d.name) ?? [];
+    return names.length ? names : DISTRICTS;
+  })();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const approved = db.workers.filter((w) => w.approval === "approved");
@@ -157,7 +162,7 @@ export default function Landing() {
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <select value={district} onChange={(e) => setDistrict(e.target.value)} className="field-input sm:max-w-[200px]">
                   <option value="">Tất cả khu vực</option>
-                  {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  {landingDistricts.map((d) => <option key={d} value={d}>{d}</option>)}
                 </select>
                 <Button size="md" iconRight="arrowR" onClick={goPost} className="flex-1">
                   {cat ? "Đăng việc & nhận báo giá" : "Tìm thợ phù hợp"}

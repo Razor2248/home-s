@@ -651,6 +651,7 @@ function Profile() {
   const { push } = useToast();
   const [bio, setBio] = useState(w?.bio ?? "");
   const [priceFrom, setPriceFrom] = useState(w?.priceFrom ?? 0);
+  const [district, setDistrict] = useState(w?.district ?? "");
   const [priceList, setPriceList] = useState(w?.priceList ?? []);
   const [busy, setBusy] = useState(false);
   const [toCat, setToCat] = useState("");
@@ -666,7 +667,12 @@ function Profile() {
 
   const save = async () => {
     setBusy(true);
-    await updateWorkerProfile(w.id, { bio, priceFrom: Number(priceFrom) || w.priceFrom, priceList: priceList.filter((p) => p.label.trim()) });
+    await updateWorkerProfile(w.id, {
+      bio,
+      priceFrom: Number(priceFrom) || w.priceFrom,
+      district: district || w.district,
+      priceList: priceList.filter((p) => p.label.trim()),
+    });
     setBusy(false);
     push("Đã lưu hồ sơ. Khách hàng sẽ thấy thông tin mới ngay.");
   };
@@ -768,6 +774,14 @@ function Profile() {
             <div className="grid grid-cols-2 gap-3">
               <Field label="Giá khởi điểm (₫)">
                 <input type="number" step={10000} className="field-input" value={priceFrom} onChange={(e) => setPriceFrom(Number(e.target.value))} />
+              </Field>
+              <Field label="Khu vực hoạt động" hint="Danh sách do Admin quản lý">
+                <select className="field-input" value={district || w.district} onChange={(e) => setDistrict(e.target.value)}>
+                  {(db.districts?.filter((d) => d.active || d.name === w.district) ?? []).map((d) => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                  {!(db.districts ?? []).some((d) => d.name === w.district) && <option value={w.district}>{w.district}</option>}
+                </select>
               </Field>
               <Field label="Phản hồi trung bình">
                 <div className="field-input flex items-center gap-2 bg-paper text-mute"><Icon name="clock" size={15} /> ~{w.responseMins} phút (hệ thống tự đo)</div>

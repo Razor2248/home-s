@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Route, Routes, useNavigate } from "react-router-dom";
 import { DashShell, type NavItem } from "../../components/DashShell";
 import AccountSettings from "../AccountSettings";
+import AdminDistricts from "./AdminDistricts";
 import { useDB, useSession } from "../../lib/store";
 import { addCategory, approveCategoryChange, approveWorker, blockUser, deleteCategory, getPlatformFee, rejectCategoryChange, rejectWorker, resolveReview, setPlatformFee, updateCategory } from "../../lib/api";
 import { remote, type RevenueData } from "../../lib/remote";
@@ -22,6 +23,7 @@ export default function AdminApp() {
     { to: "/app/admin/changes", label: "Đổi danh mục", icon: "tag", badge: pendingChanges },
     { to: "/app/admin/users", label: "Người dùng", icon: "users" },
     { to: "/app/admin/categories", label: "Danh mục", icon: "tag" },
+    { to: "/app/admin/districts", label: "Khu vực", icon: "pin" },
     { to: "/app/admin/reports", label: "Báo cáo vi phạm", icon: "flag", badge: flagged },
     { to: "/app/admin/settings", label: "Cài đặt phí", icon: "sliders" },
     { to: "/app/admin/account", label: "Tài khoản", icon: "user" },
@@ -37,6 +39,7 @@ export default function AdminApp() {
         <Route path="settings" element={<AdminSettings />} />
         <Route path="account" element={<AccountSettings />} />
         <Route path="changes" element={<CategoryChanges />} />
+        <Route path="districts" element={<AdminDistricts />} />
       </Routes>
     </DashShell>
   );

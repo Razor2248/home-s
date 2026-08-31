@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Route, Routes, useNavigate } from "react-router-dom";
 import { DashShell, type NavItem } from "../../components/DashShell";
 import AccountSettings from "../AccountSettings";
@@ -10,6 +10,12 @@ import { Badge, Button, EmptyState, Field, JobPill, Modal, Stars, useToast } fro
 import { ChatPanel } from "../../components/Chat";
 import type { Job, WorkerProfile } from "../../lib/types";
 import { MyJobs, CustomerJobDetail } from "./CustomerJobs";
+
+/** Tên khu vực đang hoạt động — do admin quản lý, rơi về mặc định nếu store chưa nạp */
+const districtNames = (db: ReturnType<typeof useDB>): string[] => {
+  const names = db.districts?.filter((d) => d.active).map((d) => d.name) ?? [];
+  return names.length ? names : DISTRICTS;
+};
 
 export default function CustomerApp() {
   const db = useDB();
@@ -210,7 +216,7 @@ function BrowseWorkers() {
         </select>
         <select value={district} onChange={(e) => setDistrict(e.target.value)} className="field-input">
           <option value="">Mọi khu vực</option>
-          {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+          {districtNames(db).map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
         <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="field-input">
           <option value="match">Phù hợp nhất (AI)</option>
@@ -371,7 +377,7 @@ function BookModal({ w, onClose }: { w: WorkerProfile; onClose: () => void }) {
           </Field>
           <Field label="Khu vực">
             <select className="field-input" value={f.district} onChange={(e) => setF({ ...f, district: e.target.value })}>
-              {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+              {districtNames(db).map((d) => <option key={d} value={d}>{d}</option>)}
             </select>
           </Field>
         </div>
@@ -407,6 +413,15 @@ function PostJob() {
   const [busy, setBusy] = useState(false);
   const est = estimateForCategory(f.categoryId);
 
+  // Khu vực mặc định hết hợp lệ (admin đổi tên/ẩn) thì tự chọn khu vực đầu tiên
+  const dNames = districtNames(db);
+  useEffect(() => {
+    if (dNames.length && !dNames.includes(f.district)) {
+      setF((p) => ({ ...p, district: dNames[0] }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dNames.join("|")]);
+
   const submit = async () => {
     if (!f.title.trim() || !f.description.trim() || !f.address.trim()) {
       push("Điền đủ tiêu đề, mô tả và địa chỉ nhé.", "err");
@@ -439,7 +454,7 @@ function PostJob() {
             </Field>
             <Field label="Khu vực">
               <select className="field-input" value={f.district} onChange={(e) => setF({ ...f, district: e.target.value })}>
-                {DISTRICTS.map((d) => <option key={d} value={d}>{d}</option>)}
+                {districtNames(db).map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </Field>
           </div>

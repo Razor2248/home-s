@@ -32,6 +32,12 @@ export interface CategoryChange {
 }
 
 /** Mã đặt lại mật khẩu (OTP sandbox) */
+export interface District {
+  id: string;
+  name: string;
+  active: boolean;
+}
+
 export interface PasswordReset {
   id: string;
   email: string;
