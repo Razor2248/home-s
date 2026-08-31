@@ -4,11 +4,24 @@ const now = Date.now();
 const h = (n: number) => now - n * 3600_000;
 const d = (n: number) => now - n * 86400_000;
 
+/** Khu vực mặc định — trùng khớp seed backend, admin có thể quản lý thêm */
+export const BASE_DISTRICTS = [
+  { id: "q1", name: "Quận 1", active: true },
+  { id: "q3", name: "Quận 3", active: true },
+  { id: "q7", name: "Quận 7", active: true },
+  { id: "q10", name: "Quận 10", active: true },
+  { id: "bt", name: "Bình Thạnh", active: true },
+  { id: "pn", name: "Phú Nhuận", active: true },
+  { id: "tb", name: "Tân Bình", active: true },
+  { id: "td", name: "Thủ Đức", active: true },
+];
+
 export function seedDB(): DB {
   return {
     seq: 1009,
     settings: { platformFee: 10 },
     payments: [],
+    districts: BASE_DISTRICTS,
     categoryChanges: [
       {
         id: "ccr-01", workerId: "w-minh", workerName: "Hoàng Nhật Minh", fromCategoryId: "dien", toCategoryId: "dieuhoa",

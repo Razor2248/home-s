@@ -15,6 +15,7 @@ import { NotificationsModule } from "./notifications/notifications";
 import { AdminModule } from "./admin/admin";
 import { PaymentsModule } from "./payments/payments";
 import { SettingsModule } from "./settings";
+import { DistrictsModule } from "./districts";
 
 @Global()
 @Module({ providers: [PrismaService], exports: [PrismaService] })
@@ -35,6 +36,7 @@ class PrismaModule {}
     AdminModule,
     PaymentsModule,
     SettingsModule,
+    DistrictsModule,
   ],
   controllers: [HealthController],
   providers: [{ provide: APP_GUARD, useClass: JwtAuthGuard }],

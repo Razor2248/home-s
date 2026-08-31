@@ -29,6 +29,12 @@ async function main() {
   ];
   for (const c of categories) await prisma.category.upsert({ where: { id: c.id }, update: c, create: c });
 
+  // ---------- Khu vực (admin quản lý) ----------
+  const districts = ["Quận 1", "Quận 3", "Quận 7", "Quận 10", "Bình Thạnh", "Phú Nhuận", "Tân Bình", "Thủ Đức"];
+  for (const name of districts) {
+    await prisma.district.upsert({ where: { name }, update: {}, create: { name } });
+  }
+
   // ---------- Người dùng ----------
   const users = [
     { id: "u-khach", role: Role.CUSTOMER, name: "Minh Anh", email: "khach@demo.vn", phone: "0901 234 567", avatarColor: "#f4581c" },

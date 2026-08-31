@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { login, logout, registerCustomer, registerWorker, requestPasswordReset, resetAll, resetPassword } from "../lib/api";
 import { remote } from "../lib/remote";
 import { getDataMode, getApiUrl, isApiMode, setDataMode, setApiUrl, type DataMode } from "../lib/config";
-import { hydrateDB, useSession } from "../lib/store";
+import { hydrateDB, useDB, useSession } from "../lib/store";
 import { cls, DISTRICTS, takeIntent } from "../lib/format";
 import { Icon, Logo, type IconName } from "../components/Icons";
 import { Button, Field, useToast } from "../components/ui";
@@ -21,6 +21,9 @@ export default function Login() {
   const navigate = useNavigate();
   const { push } = useToast();
   const session = useSession();
+  const db = useDB();
+  const activeCats = db.categories.filter((c) => c.active !== false);
+  const activeDistricts = db.districts.filter((d) => d.active);
   const [mode, setMode] = useState<"login" | "register">("login");
   const [regRole, setRegRole] = useState<"customer" | "worker">("customer");
   const [loading, setLoading] = useState(false);
@@ -33,10 +36,11 @@ export default function Login() {
   const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
   const [forgotOpen, setForgotOpen] = useState(false);
 
-  // Chế độ API: tải lại danh mục từ server để thợ đăng ký thấy cả danh mục admin vừa thêm
+  // Chế độ API: tải lại danh mục + khu vực từ server để form đăng ký khớp với admin quản lý
   useEffect(() => {
     if (isApiMode()) {
       remote.refreshCategories().then((cats) => hydrateDB({ categories: cats })).catch(() => {});
+      remote.refreshDistricts().then((ds) => ds.length && hydrateDB({ districts: ds })).catch(() => {});
     }
   }, []);
 

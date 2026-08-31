@@ -6,7 +6,7 @@
 import { http, TOKEN_KEY, REFRESH_KEY } from "./http";
 import { pickColor } from "./format";
 import type {
-  Category, CategoryChange, ChatMessage, DB, Job, Notification, Payment, Quote, Review, Role, User, WorkerProfile, WorkerRegisterInput,
+  Category, CategoryChange, ChatMessage, DB, District, Job, Notification, Payment, Quote, Review, Role, User, WorkerProfile, WorkerRegisterInput,
 } from "./types";
 
 /* ================= mapper: server → UI ================= */
@@ -17,7 +17,11 @@ const low = <T extends string>(v: string) => v.toLowerCase() as T;
 type Any = any;
 
 export function mapCategory(c: Any): Category {
-  return { id: c.id, name: c.name, icon: c.icon ?? "wrench", color: c.color ?? "#f4581c", priceMin: c.priceMin, priceMax: c.priceMax, unit: c.unit ?? "lần" };
+  return { id: c.id, name: c.name, icon: c.icon ?? "wrench", color: c.color ?? "#f4581c", priceMin: c.priceMin, priceMax: c.priceMax, unit: c.unit ?? "lần", active: c.active ?? true };
+}
+
+export function mapDistrict(d: Any): District {
+  return { id: d.id, name: d.name, active: d.active ?? true };
 }
 
 export function mapWorker(w: Any): WorkerProfile {
@@ -192,6 +196,10 @@ export const remote = {
 
   /* ---- đổi danh mục nghề + quên mật khẩu (bản mở rộng) ---- */
   refreshCategories: () => http.get<Any[]>("/categories").then((cs) => cs.map(mapCategory)),
+  refreshDistricts: () => http.get<Any[]>("/districts").then((ds) => ds.map(mapDistrict)),
+  addDistrict: (name: string) => http.post("/admin/districts", { name }),
+  updateDistrict: (id: string, patch: { name?: string; active?: boolean }) => http.patch(`/admin/districts/${id}`, patch),
+  deleteDistrict: (id: string) => http.delete(`/admin/districts/${id}`),
   myCategoryChanges: () => http.get<Any[]>("/workers/me/category-changes").then((cs) => cs.map(mapCategoryChange)),
   requestCategoryChange: (toCategoryId: string, note: string) => http.post("/workers/me/category-changes", { toCategoryId, note }),
   adminCategoryChanges: () => http.get<Any[]>("/admin/category-changes").then((cs) => cs.map(mapCategoryChange)),
@@ -232,8 +240,9 @@ export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
     quotes: [] as Quote[], reviews: [] as Review[], users: [] as User[],
     payments: [] as Payment[], categoryChanges: [] as CategoryChange[],
   };
-  const [categories, notifications, me, fee] = await Promise.all([
+  const [categories, districts, notifications, me, fee] = await Promise.all([
     remote.categories(),
+    remote.refreshDistricts().catch(() => []),
     remote.notifications(),
     remote.me(),
     remote.platformFee().catch(() => 10),
@@ -291,6 +300,7 @@ export async function fetchSnapshot(role: Role): Promise<Partial<DB>> {
 
   return {
     categories,
+    districts,
     notifications,
     users: dedupe(out.users),
     workers: dedupe(workers),

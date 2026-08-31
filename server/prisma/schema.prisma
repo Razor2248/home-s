@@ -79,16 +79,25 @@ model User {
 
 /// Danh mục dịch vụ — id là slug cố định ("dien", "nuoc"...)
 model Category {
-  id       String @id
+  id       String  @id
   name     String
   icon     String
-  color    String @default("#f4581c")
+  color    String  @default("#f4581c")
   priceMin Int
   priceMax Int
-  unit     String @default("lần")
+  unit     String  @default("lần")
+  active   Boolean @default(true) // admin tắt → ẩn khỏi đăng ký thợ / đăng việc
 
   workers WorkerProfile[]
   jobs    Job[]
+}
+
+/// Khu vực hoạt động — admin quản lý, dùng cho đăng ký thợ, đăng việc, bộ lọc tìm thợ
+model District {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
 }
 
 /// Hồ sơ thợ — quan hệ 1-1 với User

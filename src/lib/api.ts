@@ -641,6 +641,54 @@ export async function resetPassword(email: string, code: string, newPassword: st
   });
 }
 
+/* ================= KHU VỰC (admin quản lý) ================= */
+export async function addDistrict(name: string) {
+  const trimmed = name.trim();
+  if (isApiMode()) {
+    await remote.addDistrict(trimmed);
+    return after();
+  }
+  await delay(250);
+  if (getDB().districts.some((d) => d.name.toLowerCase() === trimmed.toLowerCase()))
+    throw new Error(`Khu vực "${trimmed}" đã tồn tại.`);
+  mutate((db) => {
+    db.districts = [...db.districts, { id: uid("dis"), name: trimmed, active: true }];
+  });
+}
+
+export async function updateDistrict(id: string, patch: { name?: string; active?: boolean }) {
+  if (isApiMode()) {
+    await remote.updateDistrict(id, patch);
+    return after();
+  }
+  await delay(200);
+  if (patch.name) {
+    const dup = getDB().districts.some((d) => d.id !== id && d.name.toLowerCase() === patch.name!.trim().toLowerCase());
+    if (dup) throw new Error(`Khu vực "${patch.name}" đã tồn tại.`);
+  }
+  mutate((db) => {
+    db.districts = db.districts.map((d) =>
+      d.id === id ? { ...d, name: patch.name !== undefined ? patch.name.trim() : d.name, active: patch.active ?? d.active } : d,
+    );
+  });
+}
+
+export async function deleteDistrict(id: string) {
+  if (isApiMode()) {
+    await remote.deleteDistrict(id);
+    return after();
+  }
+  await delay(250);
+  const dis = getDB().districts.find((d) => d.id === id);
+  if (!dis) return;
+  const nW = getDB().workers.filter((w) => w.district === dis.name).length;
+  const nJ = getDB().jobs.filter((j) => j.district === dis.name).length;
+  if (nW + nJ > 0) throw new Error(`Khu vực đang có ${nW} thợ và ${nJ} việc — hãy tắt hiển thị thay vì xóa.`);
+  mutate((db) => {
+    db.districts = db.districts.filter((d) => d.id !== id);
+  });
+}
+
 /* ================= "AI" HELPERS (rule-based, sẵn sàng nâng cấp LLM) ================= */
 export function matchScore(w: WorkerProfile, ctx: { categoryId?: string; district?: string } = {}): number {
   let s = 50;

@@ -48,6 +48,13 @@ export interface Category {
   priceMin: number;
   priceMax: number;
   unit: string;
+  active?: boolean; // admin tắt → ẩn khỏi đăng ký thợ / đăng việc (mặc định bật)
+}
+
+export interface District {
+  id: string;
+  name: string; // tên hiển thị — được lưu vào job.district / worker.district
+  active: boolean;
 }
 
 export interface User {
@@ -163,6 +170,7 @@ export interface DB {
   settings: { platformFee: number };
   categoryChanges: CategoryChange[];
   passwordResets: PasswordReset[];
+  districts: District[];
 }
 
 export interface CreateJobInput {

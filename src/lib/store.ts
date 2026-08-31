@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react";
 import type { DB, User } from "./types";
-import { seedDB } from "./seed";
+import { BASE_DISTRICTS, seedDB } from "./seed";
 
 const KEY = "home_services_db_v1";
 const SESSION_KEY = "home_services_session_v1";
@@ -26,6 +26,7 @@ function load(): DB {
         settings: parsed.settings ?? { platformFee: 10 },
         categoryChanges: parsed.categoryChanges ?? [],
         passwordResets: parsed.passwordResets ?? [],
+        districts: parsed.districts ?? BASE_DISTRICTS,
       };
     }
   } catch {
@@ -111,6 +112,7 @@ export function hydrateDB(partial: Partial<DB>) {
     if (partial.payments) d.payments = partial.payments;
     if (partial.settings) d.settings = partial.settings;
     if (partial.categoryChanges) d.categoryChanges = partial.categoryChanges;
+    if (partial.districts) d.districts = partial.districts;
   });
 }
 
