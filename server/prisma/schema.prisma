@@ -92,14 +92,6 @@ model Category {
   jobs    Job[]
 }
 
-/// Khu vực hoạt động — admin quản lý, dùng cho đăng ký thợ, đăng việc, bộ lọc tìm thợ
-model District {
-  id        String   @id @default(cuid())
-  name      String   @unique
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-}
-
 /// Hồ sơ thợ — quan hệ 1-1 với User
 model WorkerProfile {
   id           String    @id @default(cuid())
