@@ -1,5 +1,5 @@
-(report_chuong1.md, report_chuong2.md, report_chuong3.md are source files, so no need to add anything to .gitignore)
+(report_chuong4.md and report_chuong5.md are markdown files, which are source/config files, so according to rule 6, nothing should be added to .gitignore)
 
-```markdown
+```gitignore
 
 ```
