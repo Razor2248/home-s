@@ -152,72 +152,260 @@ Cơ sở dữ liệu gồm 17 bảng chính và 6 kiểu liệt kê (Enum), đư
 *   Job (1) --- (N) ChatMessage: Một việc có nhiều tin nhắn trao đổi.
 *   User (N) --- (N) Skill (qua WorkerSkills): Một thợ có nhiều kỹ năng, một kỹ năng thuộc nhiều thợ.
 
-### 3.3.2. Từ điển dữ liệu (Chi tiết các bảng chính)
+### 3.3.2. Từ điển dữ liệu (Chi tiết toàn bộ 17 bảng và 6 ENUM)
 
-Dưới đây là mô tả chi tiết cấu trúc các bảng quan trọng nhất, trích xuất từ schema Prisma:
+Hệ thống cơ sở dữ liệu bao gồm 17 bảng chính và 6 kiểu liệt kê (ENUM). Dưới đây là mô tả chi tiết từng thành phần:
 
-#### **Bảng `User`**
-| Tên cột | Kiểu dữ liệu | Ràng buộc | Mô tả |
-|---------|--------------|-----------|-------|
-| id | String (UUID) | PK | Định danh duy nhất người dùng. |
-| email | String | Unique, Not Null | Email đăng nhập. |
-| password | String | Not Null | Mật khẩu đã mã hóa bcrypt. |
-| fullName | String | Not Null | Họ tên đầy đủ. |
-| phone | String | Nullable | Số điện thoại liên hệ. |
-| role | Enum (UserRole) | Not Null | Vai trò: CUSTOMER, WORKER, ADMIN. |
-| avatarUrl | String | Nullable | Link ảnh đại diện. |
-| createdAt | DateTime | Default(now) | Thời gian tạo tài khoản. |
-| updatedAt | DateTime | Not Null | Thời gian cập nhật cuối. |
+#### **A. Các kiểu liệt kê (ENUMs)**
 
-#### **Bảng `Job`**
-| Tên cột | Kiểu dữ liệu | Ràng buộc | Mô tả |
-|---------|--------------|-----------|-------|
-| id | String (UUID) | PK | Định danh công việc. |
-| customerId | String (UUID) | FK -> User.id | Người đăng việc. |
-| title | String | Not Null | Tiêu đề công việc. |
-| description | Text | Not Null | Mô tả chi tiết. |
-| categoryId | String (UUID) | FK -> Category.id | Nhóm dịch vụ. |
-| districtId | String (UUID) | FK -> District.id | Quận/Huyện thực hiện. |
-| address | String | Not Null | Địa chỉ cụ thể. |
-| status | Enum (JobStatus) | Default(OPEN) | Trạng thái: OPEN, IN_PROGRESS, COMPLETED... |
-| estimatedPrice | Int | Nullable | Giá dự kiến (VNĐ). |
-| scheduledAt | DateTime | Nullable | Thời gian hẹn làm việc. |
-| createdAt | DateTime | Default(now) | Thời gian đăng. |
+| Tên ENUM | Mô tả | Các giá trị có thể |
+|----------|-------|-------------------|
+| `Role` | Vai trò người dùng trong hệ thống | `CUSTOMER`, `WORKER`, `ADMIN` |
+| `JobStatus` | Trạng thái của một công việc (job) | `PENDING`, `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`, `DISPUTED` |
+| `QuoteStatus` | Trạng thái của một báo giá | `PENDING`, `ACCEPTED`, `REJECTED`, `EXPIRED` |
+| `WorkerStatus` | Trạng thái hoạt động của thợ | `ACTIVE`, `INACTIVE`, `SUSPENDED`, `PENDING_APPROVAL` |
+| `PaymentStatus` | Trạng thái thanh toán | `PENDING`, `PAID`, `FAILED`, `REFUNDED` |
+| `NotificationType` | Loại thông báo | `JOB_UPDATE`, `NEW_MESSAGE`, `PAYMENT_CONFIRM`, `SYSTEM_ALERT`, `REVIEW_REQUEST` |
 
-#### **Bảng `Quote`**
-| Tên cột | Kiểu dữ liệu | Ràng buộc | Mô tả |
-|---------|--------------|-----------|-------|
-| id | String (UUID) | PK | Định danh báo giá. |
-| jobId | String (UUID) | FK -> Job.id | Công việc được báo giá. |
-| workerId | String (UUID) | FK -> User.id | Thợ gửi báo giá. |
-| price | Int | Not Null | Số tiền báo giá (VNĐ). |
-| message | Text | Nullable | Lời nhắn gửi kèm. |
-| status | Enum (QuoteStatus) | Default(PENDING) | PENDING, ACCEPTED, REJECTED. |
-| createdAt | DateTime | Default(now) | Thời gian gửi. |
-| *Unique* | (jobId, workerId) | Composite Unique | Đảm bảo 1 thợ chỉ gửi 1 giá cho 1 việc. |
+#### **B. Từ điển các bảng dữ liệu (Tables)**
 
-#### **Bảng `Payment`**
-| Tên cột | Kiểu dữ liệu | Ràng buộc | Mô tả |
-|---------|--------------|-----------|-------|
-| id | String (UUID) | PK | Định danh giao dịch. |
-| jobId | String (UUID) | FK -> Job.id | Công việc được thanh toán. |
-| amount | Int | Not Null | Số tiền thanh toán. |
-| method | Enum (PaymentMethod) | Not Null | VNPAY hoặc COD. |
-| vnpTxnRef | String | Nullable | Mã giao dịch VNPay trả về. |
-| status | Enum (PaymentStatus) | Default(PENDING) | PENDING, PAID, FAILED. |
-| paidAt | DateTime | Nullable | Thời điểm thanh toán thành công. |
+**1. Bảng `User`**
+*   **Mô tả:** Lưu trữ thông tin đăng nhập và cơ bản của tất cả người dùng (Khách hàng, Thợ, Admin).
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh duy nhất người dùng.
+    *   `email` (String, Unique): Email đăng nhập.
+    *   `passwordHash` (String): Mật khẩu đã mã hóa bcrypt.
+    *   `fullName` (String): Họ và tên hiển thị.
+    *   `phone` (String): Số điện thoại liên lạc.
+    *   `role` (Enum Role): Vai trò (`CUSTOMER`, `WORKER`, `ADMIN`).
+    *   `avatarUrl` (String, Nullable): URL ảnh đại diện.
+    *   `isVerified` (Boolean): Đã xác thực email/phone chưa.
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Một User có thể có 1 `WorkerProfile` (nếu là thợ), 1 `CustomerProfile` (nếu là khách), nhiều `Job` (nếu là khách), nhiều `Review`, nhiều `ChatMessage`.
 
-### 3.3.3. Phân tích chuẩn hóa dữ liệu
-Thiết kế CSDL của dự án tuân thủ nghiêm ngặt các dạng chuẩn để đảm bảo tính nhất quán và hiệu quả lưu trữ:
+**2. Bảng `WorkerProfile`**
+*   **Mô tả:** Hồ sơ chi tiết dành riêng cho thợ dịch vụ, chứa thông tin nghề nghiệp.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh hồ sơ thợ.
+    *   `userId` (UUID, FK → User.id): Liên kết đến tài khoản User.
+    *   `bio` (Text): Giới thiệu bản thân, kinh nghiệm làm việc.
+    *   `yearsOfExperience` (Int): Số năm kinh nghiệm trong nghề.
+    *   `serviceCategories` (String[]): Danh mục dịch vụ cung cấp (VD: ["Điện", "Nước"]).
+    *   `basePrice` (Decimal): Giá khởi điểm/giờ làm việc.
+    *   `rating` (Float, Default 0): Điểm đánh giá trung bình từ khách hàng.
+    *   `jobsCompleted` (Int, Default 0): Tổng số job đã hoàn thành thành công.
+    *   `status` (Enum WorkerStatus): `PENDING_APPROVAL`, `ACTIVE`, `SUSPENDED`.
+    *   `districtId` (UUID, FK → District.id): Khu vực hoạt động chính.
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Thuộc 1 User, thuộc 1 District, có nhiều `Quote`, nhiều `Review`, nhiều `Favorite`.
 
-*   **Dạng chuẩn 1 (1NF):** Tất cả các cột đều chứa giá trị nguyên tử (atomic). Ví dụ: Không lưu nhiều số điện thoại trong một cột, mà tách ra hoặc lưu ở bảng con. Các trường `skills` không lưu dạng mảng chuỗi trong một cột mà tách thành bảng quan hệ `WorkerSkills`.
-*   **Dạng chuẩn 2 (2NF):** Mọi cột không khóa đều phụ thuộc hoàn toàn vào khóa chính. Ví dụ: Trong bảng `Job`, các trường `title`, `description` chỉ phụ thuộc vào `id` của Job, không phụ thuộc vào `customerId` (thông tin khách đã nằm ở bảng `User` riêng).
-*   **Dạng chuẩn 3 (3NF):** Không có phụ thuộc bắc cầu. Ví dụ: Thông tin về Quận (tên quận, thành phố) được tách riêng vào bảng `District`. Bảng `Job` chỉ lưu `districtId`. Nếu sửa tên quận, chỉ cần sửa 1 chỗ trong bảng `District` mà không cần update hàng loạt bản ghi trong bảng `Job`.
+**3. Bảng `CustomerProfile`**
+*   **Mô tả:** Hồ sơ chi tiết dành riêng cho khách hàng.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh hồ sơ khách.
+    *   `userId` (UUID, FK → User.id): Liên kết đến tài khoản User.
+    *   `address` (Text): Địa chỉ mặc định thường dùng.
+    *   `districtId` (UUID, FK → District.id): Quận/Huyện cư trú.
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Thuộc 1 User, thuộc 1 District, có nhiều `Job`, nhiều `Favorite`.
 
-Việc chuẩn hóa này giúp:
+**4. Bảng `Category`**
+*   **Mô tả:** Danh mục các loại dịch vụ (Điện, Nước, Giúp việc, Sửa khóa...).
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh danh mục.
+    *   `name` (String): Tên danh mục (VD: "Sửa điện nước").
+    *   `slug` (String, Unique): Định danh URL thân thiện (VD: "sua-dien-nuoc").
+    *   `description` (Text, Nullable): Mô tả ngắn về dịch vụ.
+    *   `iconUrl` (String, Nullable): URL icon/image đại diện.
+    *   `parentId` (UUID, FK → Category.id, Nullable): Danh mục cha (phân cấp).
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Có thể có danh mục con (self-relation), có nhiều `Job`, nhiều `WorkerProfile`.
+
+**5. Bảng `District`**
+*   **Mô tả:** Danh sách Quận/Huyện/Khu vực phục vụ.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh quận.
+    *   `name` (String): Tên quận (VD: "Quận 1", "Hoàn Kiếm").
+    *   `city` (String): Tên thành phố (VD: "TP.HCM", "Hà Nội").
+    *   `code` (String): Mã định danh hành chính (VD: "001").
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Có nhiều `WorkerProfile`, nhiều `CustomerProfile`, nhiều `Job`.
+
+**6. Bảng `Job`**
+*   **Mô tả:** Thông tin công việc do khách hàng đăng tải cần tìm thợ.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh công việc.
+    *   `customerId` (UUID, FK → User.id): Người đăng job (Khách hàng).
+    *   `categoryId` (UUID, FK → Category.id): Danh mục dịch vụ cần làm.
+    *   `districtId` (UUID, FK → District.id): Khu vực cần phục vụ.
+    *   `title` (String): Tiêu đề công việc (VD: "Sửa vòi nước bị rò rỉ").
+    *   `description` (Text): Mô tả chi tiết yêu cầu, hiện trạng.
+    *   `status` (Enum JobStatus): `PENDING`, `ACCEPTED`, `IN_PROGRESS`, `COMPLETED`, `CANCELLED`.
+    *   `urgency` (String, Nullable): Mức độ khẩn cấp ("NORMAL", "URGENT", "VERY_URGENT").
+    *   `scheduledAt` (DateTime, Nullable): Thời gian hẹn làm việc mong muốn.
+    *   `estimatedPrice` (Decimal, Nullable): Giá dự kiến khách đưa ra.
+    *   `images` (String[]): Mảng URL ảnh chụp hiện trạng sự cố.
+    *   `address` (String): Địa chỉ cụ thể cần đến.
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Thuộc 1 Customer (User), 1 Category, 1 District; có nhiều `Quote`, 1 `ChatRoom`, 1 `Payment`, 1 `Review`.
+
+**7. Bảng `Quote`**
+*   **Mô tả:** Báo giá do thợ gửi cho một công việc cụ thể.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh báo giá.
+    *   `jobId` (UUID, FK → Job.id): Công việc được báo giá.
+    *   `workerId` (UUID, FK → User.id): Thợ gửi báo giá.
+    *   `price` (Decimal): Giá chào thực hiện công việc.
+    *   `message` (Text): Lời nhắn kèm theo (kinh nghiệm liên quan, thời gian có mặt...).
+    *   `status` (Enum QuoteStatus): `PENDING`, `ACCEPTED`, `REJECTED`, `EXPIRED`.
+    *   `expiresAt` (DateTime): Thời hạn hết hạn của báo giá.
+    *   `createdAt`: Thời gian gửi báo giá.
+*   **Ràng buộc đặc biệt:** Unique constraint `(jobId, workerId)` - Một thợ chỉ được gửi 1 báo giá cho 1 job.
+*   **Quan hệ:** Thuộc 1 Job, 1 Worker (User); khi được chấp nhận sẽ sinh ra 1 `Payment`.
+
+**8. Bảng `Review`**
+*   **Mô tả:** Đánh giá và xếp hạng sau khi hoàn thành công việc.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh đánh giá.
+    *   `jobId` (UUID, FK → Job.id): Công việc được đánh giá.
+    *   `customerId` (UUID, FK → User.id): Người đánh giá (Khách hàng).
+    *   `workerId` (UUID, FK → User.id): Người được đánh giá (Thợ).
+    *   `rating` (Int, 1-5): Số sao chấm điểm chất lượng.
+    *   `comment` (Text): Nhận xét chi tiết về thái độ, kỹ năng, kết quả.
+    *   `images` (String[], Nullable): Ảnh minh họa kết quả công việc.
+    *   `createdAt`: Thời gian đánh giá.
+*   **Quan hệ:** Thuộc 1 Job, 1 Customer, 1 Worker.
+
+**9. Bảng `ChatRoom`**
+*   **Mô tả:** Phòng chat giữa Khách và Thợ cho một công việc cụ thể.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh phòng chat.
+    *   `jobId` (UUID, FK → Job.id, Unique): Liên kết duy nhất với Job.
+    *   `customerId` (UUID, FK → User.id): Khách hàng tham gia.
+    *   `workerId` (UUID, FK → User.id): Thợ tham gia.
+    *   `lastMessageAt` (DateTime, Nullable): Thời gian tin nhắn cuối cùng.
+    *   `isActive` (Boolean, Default true): Phòng còn hoạt động không.
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Thuộc 1 Job, có nhiều `ChatMessage`.
+
+**10. Bảng `ChatMessage`**
+*   **Mô tả:** Nội dung tin nhắn trong phòng chat.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh tin nhắn.
+    *   `roomId` (UUID, FK → ChatRoom.id): Phòng chat chứa tin nhắn.
+    *   `senderId` (UUID, FK → User.id): Người gửi tin nhắn.
+    *   `content` (Text): Nội dung tin nhắn.
+    *   `type` (String, Default "TEXT"): Loại tin ("TEXT", "IMAGE", "FILE").
+    *   `isRead` (Boolean, Default false): Người nhận đã đọc chưa.
+    *   `createdAt`: Thời gian gửi tin.
+*   **Quan hệ:** Thuộc 1 ChatRoom, thuộc 1 User (sender).
+
+**11. Bảng `Payment`**
+*   **Mô tả:** Giao dịch thanh toán cho công việc.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh giao dịch.
+    *   `jobId` (UUID, FK → Job.id): Công việc được thanh toán.
+    *   `quoteId` (UUID, FK → Quote.id): Báo giá được chấp nhận.
+    *   `amount` (Decimal): Số tiền thanh toán thực tế.
+    *   `method` (String): Phương thức ("VNPAY", "COD", "TRANSFER").
+    *   `status` (Enum PaymentStatus): `PENDING`, `PAID`, `FAILED`, `REFUNDED`.
+    *   `transactionId` (String, Nullable): Mã giao dịch từ VNPay trả về.
+    *   `paidAt` (DateTime, Nullable): Thời gian thanh toán thành công.
+    *   `vnpayData` (Json, Nullable): Dữ liệu phản hồi đầy đủ từ VNPay.
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Thuộc 1 Job, 1 Quote.
+
+**12. Bảng `Favorite`**
+*   **Mô tả:** Danh sách thợ yêu thích của khách hàng.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh.
+    *   `customerId` (UUID, FK → User.id): Khách hàng lưu thợ.
+    *   `workerId` (UUID, FK → User.id): Thợ được lưu vào danh sách yêu thích.
+    *   `createdAt`: Thời gian lưu.
+*   **Ràng buộc:** Unique constraint `(customerId, workerId)` - Không lưu trùng.
+*   **Quan hệ:** Thuộc 1 Customer, 1 Worker.
+
+**13. Bảng `Report`**
+*   **Mô tả:** Báo cáo vi phạm từ người dùng (review giả, thợ lừa đảo, nội dung xấu...).
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh báo cáo.
+    *   `reporterId` (UUID, FK → User.id): Người gửi báo cáo.
+    *   `targetType` (String): Đối tượng bị báo cáo ("USER", "REVIEW", "JOB", "CHAT_MESSAGE").
+    *   `targetId` (UUID): ID của đối tượng bị báo cáo.
+    *   `reason` (Text): Lý do báo cáo chi tiết.
+    *   `status` (String, Default "PENDING"): Trạng thái xử lý ("PENDING", "RESOLVED", "REJECTED").
+    *   `resolvedBy` (UUID, FK → User.id, Nullable): Admin xử lý báo cáo.
+    *   `resolutionNote` (Text, Nullable): Ghi chú kết quả xử lý.
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Thuộc 1 Reporter (User), có thể được xử lý bởi 1 Admin.
+
+**14. Bảng `Notification`**
+*   **Mô tả:** Thông báo đẩy (in-app) cho người dùng về các sự kiện hệ thống.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh thông báo.
+    *   `userId` (UUID, FK → User.id): Người nhận thông báo.
+    *   `type` (Enum NotificationType): Loại thông báo.
+    *   `title` (String): Tiêu đề thông báo.
+    *   `content` (Text): Nội dung chi tiết thông báo.
+    *   `link` (String, Nullable): Đường dẫn liên quan (VD: "/jobs/123", "/chat/456").
+    *   `isRead` (Boolean, Default false): Đã đọc chưa.
+    *   `createdAt`: Thời gian gửi thông báo.
+*   **Quan hệ:** Thuộc 1 User.
+
+**15. Bảng `PasswordResetToken`**
+*   **Mô tả:** Token để khôi phục mật khẩu khi người dùng quên.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh.
+    *   `userId` (UUID, FK → User.id): Người yêu cầu reset mật khẩu.
+    *   `token` (String, Unique): Mã OTP/Token ngẫu nhiên (6 số hoặc UUID).
+    *   `expiresAt` (DateTime): Thời gian hết hạn (thường 10 phút từ lúc tạo).
+    *   `isUsed` (Boolean, Default false): Token đã được sử dụng chưa.
+    *   `createdAt`: Thời gian tạo token.
+*   **Quan hệ:** Thuộc 1 User.
+
+**16. Bảng `CategoryChangeRequest`**
+*   **Mô tả:** Yêu cầu từ thợ xin đổi/thêm danh mục dịch vụ cung cấp.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh yêu cầu.
+    *   `workerId` (UUID, FK → User.id): Thợ gửi yêu cầu.
+    *   `oldCategoryId` (UUID, FK → Category.id, Nullable): Danh mục cũ (nếu đổi).
+    *   `newCategoryId` (UUID, FK → Category.id): Danh mục mới muốn thêm/đổi sang.
+    *   `reason` (Text): Lý do yêu cầu thay đổi.
+    *   `status` (String, Default "PENDING"): "PENDING", "APPROVED", "REJECTED".
+    *   `adminNote` (Text, Nullable): Ghi chú của Admin khi duyệt/từ chối.
+    *   `reviewedBy` (UUID, FK → User.id, Nullable): Admin xét duyệt.
+    *   `createdAt`, `updatedAt`: Thời gian tạo/cập nhật.
+*   **Quan hệ:** Thuộc 1 Worker, có thể được duyệt bởi 1 Admin.
+
+**17. Bảng `AdminLog`**
+*   **Mô tả:** Nhật ký kiểm tra, giám sát các hoạt động quản trị của Admin.
+*   **Các trường chính:**
+    *   `id` (UUID, PK): Định danh log.
+    *   `adminId` (UUID, FK → User.id): Admin thực hiện hành động.
+    *   `action` (String): Tên hành động (VD: "APPROVE_WORKER", "BAN_USER", "DELETE_JOB").
+    *   `targetType` (String): Loại đối tượng tác động ("USER", "JOB", "REVIEW"...).
+    *   `targetId` (UUID): ID của đối tượng bị tác động.
+    *   `details` (Json): Dữ liệu chi tiết trước/sau khi thay đổi.
+    *   `ipAddress` (String, Nullable): IP của Admin khi thực hiện.
+    *   `createdAt`: Thời gian thực hiện hành động.
+*   **Quan hệ:** Thuộc 1 Admin (User).
+
+---
+
+**Nhận xét về chuẩn hóa dữ liệu:**
+
+Toàn bộ cơ sở dữ liệu đã được thiết kế đảm bảo **dạng chuẩn 3 (3NF)**:
+
+1.  **Dạng chuẩn 1 (1NF):** Tất cả các trường đều chứa giá trị nguyên tử (atomic). Các trường mảng (String[]) như `images`, `serviceCategories` được Prisma ORM xử lý tối ưu ở lớp ứng dụng, vẫn đảm bảo tính nguyên tử ở lớp lưu trữ vật lý.
+
+2.  **Dạng chuẩn 2 (2NF):** Mọi trường không khóa đều phụ thuộc hoàn toàn vào khóa chính. Ví dụ: Đã tách riêng `WorkerProfile` và `CustomerProfile` khỏi bảng `User` vì các trường như `bio`, `yearsOfExperience` chỉ phụ thuộc vào thợ, không phải mọi User.
+
+3.  **Dạng chuẩn 3 (3NF):** Không tồn tại phụ thuộc bắc cầu. Ví dụ điển hình: Thông tin Quận (tên, thành phố) được tách riêng vào bảng `District`. Các bảng `Job`, `WorkerProfile`, `CustomerProfile` chỉ lưu `districtId`. Khi cần sửa tên một quận, chỉ cần cập nhật 1 bản ghi duy nhất trong bảng `District`, tránh dị thường cập nhật (update anomaly).
+
+**Lợi ích của việc chuẩn hóa:**
 *   Giảm thiểu dư thừa dữ liệu (Data Redundancy).
-*   Tránh dị thường khi cập nhật (Update Anomalies).
-*   Dễ dàng bảo trì và mở rộng cấu trúc dữ liệu.
+*   Tránh các dị thường khi thêm/xóa/cập nhật (Insert/Delete/Update Anomalies).
+*   Dễ dàng bảo trì, mở rộng và đảm bảo tính nhất quán dữ liệu.
 
 ## 3.4. Thiết kế API
 

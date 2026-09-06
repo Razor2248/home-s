@@ -1,5 +1,1 @@
-(report_chuong4.md and report_chuong5.md are markdown files, which are source/config files, so according to rule 6, nothing should be added to .gitignore)
-
-```gitignore
-
-```
+Nothing should be ignored based on the provided file changes. The only modified file is `report_chuong3.md`, which is a markdown source file and should not be ignored.
